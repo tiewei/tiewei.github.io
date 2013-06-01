@@ -28,7 +28,7 @@ Welcome to sharing my original articles, but please mark the author and source l
 + Mandarin + English
 + Java
 + Ruby 
-+ Python <learning>
++ Python (learning)
 
 **Environment**
 
