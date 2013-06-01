@@ -1,8 +1,9 @@
 ---
 layout: post
 category : openstack
-tagline: "Install guide"
+tagline: ""
 tags : [openstack, centos, install]
+description : "Openstack install guide"
 ---
 
 {% include JB/setup %}
