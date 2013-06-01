@@ -1,9 +1,9 @@
 ---
 layout: post
 category : openstack
-tagline: ""
-tags : [openstack, centos, install]
-description : "Openstack install guide"
+title : Openstack Install Guide @ centos 6.3
+tagline: "在centos 6.3上安装openstack Folsom"
+tags : [openstack]
 ---
 
 {% include JB/setup %}

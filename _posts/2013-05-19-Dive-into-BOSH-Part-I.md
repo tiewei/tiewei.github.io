@@ -1,10 +1,12 @@
 ---
 layout: post
-category : bosh
-tagline: "BOSH Overview"
-tags : [ruby, bosh]
-description : "Dive into BOSH"
+category : BOSH
+title : "Dive into BOSH - Overview"
+tagline: "深入理解BOSH - 概述"
+tags : [BOSH]
 ---
+
+{% include JB/setup %}
 
 近期研究用BOSH部署cloud foundry，苦于BOSH的参考文献非常有限，为了实现知其然且知其所以然的目的，深入研究了BOSH的代码，希望能对更好的利用BOSH部署更多的系统，提供帮助。
 
@@ -46,7 +48,7 @@ BOSH的代码保存在[github上](https://github.com/cloudfoundry/bosh), 可以c
 
 * __CLI相关__ BOSH命令行相关的包，主要是在安装BOSH CLI本地进行操作，响应用户命令，并请求BOSH director在BOSH集群中按照命令进行操作。
 	
-	+ bosh\_cli : 所有`bosh`命令行操作的入口，支持扩展，扩展的方法见另一篇博客[Ruby 语言特性在BOSH中的运用][1]
+	+ bosh\_cli : 所有`bosh`命令行操作的入口，支持扩展，扩展的方法见另一篇博客[Ruby 元编程在BOSH中的运用][1]
 
 	+ bosh\_cli\_plugin\_aws : 扩展自bosh\_cli，所有`bosh aws`命令行操作的入口，用户和aws交互
 
@@ -119,5 +121,5 @@ BOSH的代码保存在[github上](https://github.com/cloudfoundry/bosh), 可以c
 
 _TODO: 翻译_
 
-[1]: http://tiewei.github.io/bosh/Ruby-Magic-in-BOSH/ "ruby语言特性在BOSH中的应用"
+[1]: http://tiewei.github.io/bosh/Ruby-Magic-in-BOSH/ "ruby元编程在BOSH中的应用"
 [2]: http://tiewei.github.io/bosh/BOSH-Terms-and-Working-Steps/ "BOSH中的概念和工作流程"

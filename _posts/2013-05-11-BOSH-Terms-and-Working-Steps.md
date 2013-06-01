@@ -1,10 +1,12 @@
 ---
 layout: post
-category : bosh
-tagline: ""
-tags : [ruby, bosh]
-description : "bosh terms and working steps"
+category : BOSH
+title : "BOSH Terms and Working Processes"
+tagline: "BOSH相关的术语和工作流程"
+tags : [BOSH]
 ---
+
+{% include JB/setup %}
 
 ## Terms:
 

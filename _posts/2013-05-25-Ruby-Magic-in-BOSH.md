@@ -1,16 +1,16 @@
 ---
 layout: post
-category : bosh
-tagline: ""
-tags : [ruby, bosh]
-description : "Ruby Magic in BOSH"
+category : BOSH
+title : "Ruby Magic in BOSH"
+tagline: "Ruby 元编程在BOSH中的运用"
+tags : [BOSH, Ruby]
 ---
 
-##Ruby 语言特性在BOSH中的运用
+{% include JB/setup %}
 
 最近研究Cloud Foundry与Openstack的集成功能，考虑到最终运用需要一个可支持动态部署的环境，因此选择了使用VMWare推荐的BOSH进行持续部署，
 同时由于BOSH相关的文档非常有限，对于各种配置项的含义并没有专业的文档进行介绍，本着知其然要知其所以然的精神，对BOSH的代码进行了一些研究。
-同时作为Ruby新手，在阅读中被Ruby动态编程特性所折服，学习了很多Ruby编程的*奇淫技巧*，在此总结一二。
+同时作为Ruby新手，在阅读中被Ruby动态编程特性所折服，学习了很多Ruby元编程的奇淫技巧，在此总结一二。
 
 本文中多处比较ruby和java的实现差异，是为突出动态语言在处理一类问题的思考方式与静态语言的差异，而非比较语言本身优劣。特此声明，以免陷入无意义的语言之争。
 

@@ -1,10 +1,12 @@
 ---
 layout: post
-category : bosh
-tagline: "BOSH CLI"
-tags : [ruby, bosh, bosh-cli]
-description : "Dive into BOSH"
+category : BOSH
+title : "Dive into BOSH"
+tagline: "深入理解BOSH - BOSH CLI"
+tags : [BOSH]
 ---
+
+{% include JB/setup %}
 
 BOSH CLI 是BOSH命令行的入口，所有对BOSH的操作都是通过BOSH CLI进行。本文中将介绍几个常用命令的执行过程。
 
