@@ -94,7 +94,6 @@ Output
     instance method 'blubb' added 
     class method 'foobar' added
 
-
 有了这个简单的例子，我们来看看bosh_cli是如何实现响应用户的命令请求输入的
 
 入口在`bosh_cli/bin/bosh`,其中就是调用`Bosh::Cli::Runner.run(ARGV.dup)`来响应。
@@ -269,7 +268,7 @@ Output
 
 如果此类方法用java实现，可以通过反射机制加载所需要的对象，然后拼出对应的方法来执行，然而灵活性远比动态语言差。或许还有其他更好的方法
 
-
+#END
 
 
 
