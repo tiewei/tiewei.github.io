@@ -7,8 +7,6 @@ tags : [openstack, centos, install]
 
 {% include JB/setup %}
 
-# Install Openstack Folsom @ centos\_6.3\_x86_64
-
 ## Preparation
 
 ### Enable the EPEL repository
@@ -34,7 +32,7 @@ tags : [openstack, centos, install]
 ### Install  openstack and all related packages 
 
 
-$yum  install -y openstack-utils openstack-keystone python-keystoneclient mysql mysql-server MySQL-python wget openstack-nova openstack-glance openstack-utils memcached qpid-cpp-server openstack-swift openstack-swift-proxy openstack-swift-account openstack-swift-container openstack-swift-object memcached xfsprogs  memcached mod-wsgi openstack-dashboard bridge-utils
+    $yum  install -y openstack-utils openstack-keystone python-keystoneclient mysql mysql-server MySQL-python wget openstack-nova openstack-glance openstack-utils memcached qpid-cpp-server openstack-swift openstack-swift-proxy openstack-swift-account openstack-swift-container openstack-swift-object memcached xfsprogs  memcached mod-wsgi openstack-dashboard bridge-utils
 
 
 ## Configure Keystone
@@ -82,7 +80,7 @@ Set mysql root password
     $wget https://raw.github.com/TieWei/blog-docs/master/Install_Openstack_F_@centos_6.3_x86_64/sample_data.sh
     $chmod +x sample_data.sh;./sample_data.sh
 
- *default setting is as list :*
+**default setting is as list :**
 
 
     Tenant		User      Roles		Password
@@ -333,9 +331,9 @@ Configure Glance service and set swift as glance back-end storage
 
 *default user/password is glance/glance*
 
-###  Edit the Glance configuration files 
+####  Edit the Glance configuration files 
 
-#### edit `/etc/glance/glance-api.conf`
+##### edit `/etc/glance/glance-api.conf`
 	
 
     [DEFAULT]
@@ -360,7 +358,7 @@ Configure Glance service and set swift as glance back-end storage
     flavor=keystone
 
 
-#### edit `/etc/glance/glance-registry.conf`
+##### edit `/etc/glance/glance-registry.conf`
 
 
     [keystone_authtoken]
@@ -422,10 +420,7 @@ check kvm either kvm-intel is loaded
 		
 ### Configuring the SQL Database (MySQL) on the Cloud Controller
 
-
     $openstack-db --init --service nova
-
-
 
 ### Configuring OpenStack Compute
 
@@ -552,13 +547,13 @@ Creating the Network for Compute VMs
 
 ### Running Virtual Machine Instances
 
-disable qpid auth, edit `/etc/qpidd.conf`
+#### disable qpid auth, edit `/etc/qpidd.conf`
 
 
     auth=no
 
 
-enable ssh and icmp
+#### enable ssh and icmp
 
 
     $nova secgroup-list
@@ -566,7 +561,7 @@ enable ssh and icmp
     $nova secgroup-add-rule default icmp -1 -1 0.0.0.0/0
 
 
-adding a keypair (for ssh)
+#### adding a keypair (for ssh)
 
 
     $mkdir ~/.ssh && ssh-keygen
@@ -574,7 +569,7 @@ adding a keypair (for ssh)
     $nova keypair-list
 
 
-**starting an instance**
+#### starting an instance
 
 
     $nova flavor-list //you will get [flavor_id]
@@ -587,7 +582,7 @@ adding a keypair (for ssh)
     //login as 'cirros' user. default password: 'cubswin:)'. use 'sudo' for root.
 
 
-delete the instance
+#### delete the instance
 
 
     $nova delete [instance_id]
@@ -595,7 +590,7 @@ delete the instance
 
 ## Installing the OpenStack Dashboard
 
-configure
+### configure
 
 edit `/etc/openstack-dashboard/local_settings`
 
@@ -618,7 +613,7 @@ edit `/etc/openstack-dashboard/local_settings`
     OPENSTACK_KEYSTONE_ADMIN_URL = "http://%s:35357/v2.0" % OPENSTACK_HOST
 
 
-Initialize db
+### Initialize db
 
 
     CREATE DATABASE dash;
@@ -628,11 +623,11 @@ Initialize db
     $service httpd restart
 
 
-Verify
+### Verify
 
 login http://127.0.0.1/dashboard  user:admin pass:secrete
 
 
-# END
+##END
 
 
