@@ -1,7 +1,7 @@
 ---
 layout: post
 category : BOSH
-title : "Dive into BOSH"
+title : "Dive into BOSH - BOSH ClI"
 tagline: "深入理解BOSH - BOSH CLI"
 tags : [BOSH]
 ---
