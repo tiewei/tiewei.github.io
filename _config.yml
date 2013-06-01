@@ -74,10 +74,10 @@ JB :
   # Set 'provider' to the comment provider you want to use.
   # Set 'provider' to false to turn commenting off globally.
   #
-  comments :
-    provider : disqus
-      disqus :
-        short_name : techrest
+  comments : 
+    provider : disqus 
+    disqus : 
+      short_name : techrest 
 #    livefyre :
 #      site_id : 123
 #    intensedebate :
