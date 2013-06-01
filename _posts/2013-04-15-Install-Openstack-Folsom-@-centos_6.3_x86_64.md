@@ -77,7 +77,7 @@ Set mysql root password
 ### Setting up tenants, users, and roles
 
 
-    $wget https://raw.github.com/TieWei/blog-docs/master/Install_Openstack_F_@centos_6.3_x86_64/sample_data.sh
+    $wget https://raw.github.com/TieWei/tiewei.github.io/master/codes/openstack_guide/sample_data.sh
     $chmod +x sample_data.sh;./sample_data.sh
 
 **default setting is as list :**
