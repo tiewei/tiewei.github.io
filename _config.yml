@@ -75,9 +75,11 @@ JB :
   # Set 'provider' to false to turn commenting off globally.
   #
   comments : 
-    provider : disqus 
-    disqus : 
-      short_name : techrest 
+    provider : duoshuo 
+    duoshuo : 
+     name : techrest
+#    disqus : 
+#      short_name : techrest 
 #    livefyre :
 #      site_id : 123
 #    intensedebate :
