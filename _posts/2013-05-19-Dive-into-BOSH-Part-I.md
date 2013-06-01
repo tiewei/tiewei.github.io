@@ -46,7 +46,7 @@ BOSH的代码保存在[github上](https://github.com/cloudfoundry/bosh), 可以c
 
 * __CLI相关__ BOSH命令行相关的包，主要是在安装BOSH CLI本地进行操作，响应用户命令，并请求BOSH director在BOSH集群中按照命令进行操作。
 	
-	+ bosh\_cli : 所有`bosh`命令行操作的入口，支持扩展，扩展的方法见另一篇博客[Ruby 语言特性在BOSH中的运用](http://tiewei.github.io/bosh/Ruby-Magic-in-BOSH/)
+	+ bosh\_cli : 所有`bosh`命令行操作的入口，支持扩展，扩展的方法见另一篇博客[Ruby 语言特性在BOSH中的运用][1]
 
 	+ bosh\_cli\_plugin\_aws : 扩展自bosh\_cli，所有`bosh aws`命令行操作的入口，用户和aws交互
 
@@ -115,7 +115,9 @@ BOSH的代码保存在[github上](https://github.com/cloudfoundry/bosh), 可以c
 
 ## BOSH 部署过程中的一些概念术语和部署步骤
 
-详见本人另外一篇博客[《BOSH Terms and Working Steps》](https://github.com/TieWei/blog-docs/blob/master/BOSH_Terms_and_Working_Steps/BOSH_Terms_and_Working_Steps.md)
+详见本人另外一篇博客[《BOSH Terms and Working Steps》][2]
 
 _TODO: 翻译_
 
+[1]: http://tiewei.github.io/bosh/Ruby-Magic-in-BOSH/ "ruby语言特性在BOSH中的应用"
+[2]: http://tiewei.github.io/bosh/BOSH-Terms-and-Working-Steps/ "BOSH中的概念和工作流程"
