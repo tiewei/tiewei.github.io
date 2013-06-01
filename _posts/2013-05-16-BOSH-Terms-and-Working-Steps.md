@@ -1,4 +1,10 @@
-# BOSH Terms and Working Steps
+---
+layout: post
+category : bosh
+tagline: ""
+tags : [ruby, bosh]
+description : "bosh terms and working steps"
+---
 
 ## Terms:
 
