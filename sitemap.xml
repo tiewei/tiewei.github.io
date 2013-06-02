@@ -1,23 +1,23 @@
 ---
-title : Sitemap.xml
+title : sitemap.xml
 ---
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset
-      xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-      xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
-            http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
-{% for page in site.pages %}
-<url>
-  <loc>{{site.production_url}}{{ page.url }}</loc>
-</url>
-{% endfor %}
+    {% for post in site.posts %}
+    <url>
+        <loc>{{ site.production_url }}{{ post.url | remove: 'index.html' }}</loc>
+    </url>
+    {% endfor %}
 
-{% for post in site.posts %}
-<url>
-   <loc>{{site.production_url}}{{ post.url }}</loc>
-</url>
-{% endfor %}
+    {% for page in site.pages %}
+    {% if page.layout != nil %}
+    {% if page.layout != 'feed' %}
+    <url>
+        <loc>{{ site.production_url }}{{ page.url | remove: 'index.html' }}</loc>
+    </url>
+    {% endif %}
+    {% endif %}
+    {% endfor %}
 
 </urlset>
