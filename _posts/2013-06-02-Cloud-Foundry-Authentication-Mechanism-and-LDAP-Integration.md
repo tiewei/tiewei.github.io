@@ -8,7 +8,7 @@ tags: [Cloudfoundry, Authorization, LDAP]
 ---
 {% include JB/setup %}
 
-本文简要介绍Cloud Foundry的用户认证过程，以及相关项目组件，并介绍同企业LDAP认证集成的方法。
+本文简要介绍Cloud Foundry的用户认证过程，以及相关项目组件，并介绍同企业LDAP认证集成的方法。碍于篇幅，本文将众多代码和配置文件信息用github链接的方式给出，具体到行，请辅助查阅。
 
 ## Cloud Foundry 认证
 
@@ -48,19 +48,7 @@ VCAP的控制组件V1版本，主要功能是告知客户端(vmc)进行用户认
 2. **vmc -> login-server: GET /login**
  
    此处是请求login-server获取需要验证的信息的提示，如
-
-    ```
-	  "prompts": {
-	    "username": [
-	      "text",
-	      "Email"
-	    ],
-	    "password": [
-	      "password",
-	      "Password"
-	    ]
-	  }
-    ```
+   `"prompts": { "username": [ "text", "Email" ], "password": [ "password", "Password" ] }`
 
     该提示信息的处理逻辑在`org.cloudfoundry.identity.uaa.login.RemoteUaaController`中，根据`prompts`属性，首先选取`prompts`属性，如果没有被设定，则请求UAA uaaBaseUrl(配置项中的`uaa.url`见[代码][11])，如果请求失败，则采用默认值Email+Password，相关代码见[RemoteUaaController#getLoginInfo][12]。如果要修改提示信息，可以在spring-servlet.xml中注入属性值，或调整最后默认值。
 
@@ -70,7 +58,7 @@ VCAP的控制组件V1版本，主要功能是告知客户端(vmc)进行用户认
 
 4. **login-server -> ldap**
 	
-   login-server对ldap和OAuth的请求和验证是通过Spring Security实现的。对应的filter是[AuthzAuthenticationFilter][15]([spring配置][13])，会根据spring_profile确定是直接使用uaa的oauth验证还是请求外部验证。对于ldap类型的验证，将采用[UsernamePasswordExtractingAuthenticationManager][16]进行([spring配置代码][14])，实际还是通过org.springframework.security.ldap.authentication.LdapAuthenticationProvider代理来进行实际的LDAP验证。如果验证成功，进入[RemoteUaaController#startAuthorization][17]进行响应。
+   login-server对ldap和OAuth的请求和验证是通过Spring Security实现的。对应的filter是[AuthzAuthenticationFilter][15]([spring配置][13])，会根据spring_profile确定是直接使用uaa的oauth验证还是请求外部验证。对于ldap类型的验证，将采用[UsernamePasswordExtractingAuthenticationManager][16]进行([spring配置代码][14])，实际还是通过`org.springframework.security.ldap.authentication.LdapAuthenticationProvider`代理来进行实际的LDAP验证。如果验证成功，进入[RemoteUaaController#startAuthorization][17]进行响应。
 
 5. **login-server -> uaa : POST /oauth/authorize?client\_id=vmc&response\_type=token&source=login&username=foo**
    
@@ -84,68 +72,64 @@ VCAP的控制组件V1版本，主要功能是告知客户端(vmc)进行用户认
 
    uaa也是利用Spring Security实现的认证和授权功能。请求中包含`source=login`向uaa声明来源来自login-server，被声明在login-server-security.xml中的[loginAuthorizeRequestMatcher][19]命中，这里声明了两个filter
 
-
-   ```
    		<custom-filter ref="oauthResourceAuthenticationFilter" position="PRE_AUTH_FILTER" />
 		<custom-filter ref="loginAuthenticationFilter" position="FORM_LOGIN_FILTER" />
-   ```
 
    前者声明为org.springframework.security.oauth2.provider.error.OAuth2AuthenticationEntryPoint的filter，在uaa.yml中配置了Login-server应具有的权限操作_oauth.login_ 
    后者是[AuthzAuthenticationFilter][15]的一个实例，会从request中抽取用户的username，将实际的认证操作代理给[loginAuthenticationMgr][21]中，声明为[LoginAuthenticationManager][21]的一个实例，根据[spring配置][22]，传入两个重要参数，其中”addNewAccounts“用于判断是否在用户不存在时根据Login传入的用户信息新建用户，对应`uaa.yml`中的`login.addnew`的值，”userDatabase“则根据配置文件中的database信息代理uaa-db的操作。
 
    在[LoginAuthenticationManager#authenticate][21]中，代码如下
 
-   ```
-   	@Override
-	public Authentication authenticate(Authentication request) throws AuthenticationException {
+	   	@Override
+		public Authentication authenticate(Authentication request) throws AuthenticationException {
 
-		if (!(request instanceof AuthzAuthenticationRequest)) {
-			logger.debug("Cannot process request of type: " + request.getClass().getName());
-			return null;
-		}
+			if (!(request instanceof AuthzAuthenticationRequest)) {
+				logger.debug("Cannot process request of type: " + request.getClass().getName());
+				return null;
+			}
 
-		AuthzAuthenticationRequest req = (AuthzAuthenticationRequest) request;
-		Map<String, String> info = req.getInfo();
+			AuthzAuthenticationRequest req = (AuthzAuthenticationRequest) request;
+			Map<String, String> info = req.getInfo();
 
-		logger.debug("Processing authentication request for " + req.getName());
+			logger.debug("Processing authentication request for " + req.getName());
 
-		SecurityContext context = SecurityContextHolder.getContext();
+			SecurityContext context = SecurityContextHolder.getContext();
 
-		if (context.getAuthentication() instanceof OAuth2Authentication) {
-			OAuth2Authentication authentication = (OAuth2Authentication) context.getAuthentication();
-			if (authentication.isClientOnly()) {
-				UaaUser user = getUser(req, info);
-				try {
-					user = userDatabase.retrieveUserByName(user.getUsername());
-				}
-				catch (UsernameNotFoundException e) {
-					// Not necessarily fatal
-					if (addNewAccounts) {
-						// Register new users automatically
-						publish(new NewUserAuthenticatedEvent(user));
-						try {
-							user = userDatabase.retrieveUserByName(user.getUsername());
+			if (context.getAuthentication() instanceof OAuth2Authentication) {
+				OAuth2Authentication authentication = (OAuth2Authentication) context.getAuthentication();
+				if (authentication.isClientOnly()) {
+					UaaUser user = getUser(req, info);
+					try {
+						user = userDatabase.retrieveUserByName(user.getUsername());
+					}
+					catch (UsernameNotFoundException e) {
+						// Not necessarily fatal
+						if (addNewAccounts) {
+							// Register new users automatically
+							publish(new NewUserAuthenticatedEvent(user));
+							try {
+								user = userDatabase.retrieveUserByName(user.getUsername());
+							}
+							catch (UsernameNotFoundException ex) {
+								throw new BadCredentialsException("Bad credentials");
+							}
 						}
-						catch (UsernameNotFoundException ex) {
+						else {
 							throw new BadCredentialsException("Bad credentials");
 						}
 					}
-					else {
-						throw new BadCredentialsException("Bad credentials");
-					}
+					Authentication success = new UaaAuthentication(new UaaPrincipal(user), user.getAuthorities(),
+							(UaaAuthenticationDetails) req.getDetails());
+					publish(new UserAuthenticationSuccessEvent(user, success));
+					return success;
 				}
-				Authentication success = new UaaAuthentication(new UaaPrincipal(user), user.getAuthorities(),
-						(UaaAuthenticationDetails) req.getDetails());
-				publish(new UserAuthenticationSuccessEvent(user, success));
-				return success;
 			}
+
+			logger.debug("Did not locate login credentials");
+			return null;
+
 		}
 
-		logger.debug("Did not locate login credentials");
-		return null;
-
-	}
-   ```
    代码很简单，首先验证传入请求的类型是否是AuthzAuthenticationRequest并确认是OAuth2类型的验证，根据请求中包含的user信息，要求name和email字段至少二者有其一，如果name为null，则将email作为name，反之如果email为null，则根据name中是否包含@进行判断，如果包含,email=name，否则email=name@unknown.org，而givenName和familyName如果不存在，则分别取email字段的@前后两部分，[具体代码见此][23]。之后查询uaa-db中是否包含username=foo的用户，如果找到则返回验证成功。否则如果允许添加新用户，则发布新增用户的事件，由[ScimUserBootstrap][24]负责处理事件，新增用户，当用户添加成功后返回验证成功，否则验证失败。
 
    简单介绍一下UAA中的事件机制，这里新增用户和记录Log等操作都基于Spring的事件机制，uaa项目内部总共有三类事件，[AbstractUaaEvent][25] + [AuthenticationFailureBadCredentialsEvent][26] (Spring的事件，UAA监听用于发布AbstractUaaEvent的事件实例以便log) + [NewUserAuthenticatedEvent][27] ，分别对应三个Listener [AuditListener][28] + [BadCredentialsListener][29] + [ScimUserBootstrap][24]。SCIM在提供用户操作的REST标准接口之外，也监听新建用户的事件。其中AbstractUaaEvent主要利用[JdbcFailedLoginCountingAuditService][30]和[LoggingAuditService][31]，前者监听UserAuthenticationSuccess/PasswordChangeSuccess/UserAuthenticationFailure当用户登录后修改密码或登录失败时操作sec_audit表删除认证信息，后者则进行log的管理和统计记录等功能，NewUserAuthenticatedEvent则仅仅用户新建用户。
@@ -215,22 +199,20 @@ VCAP的控制组件V1版本，主要功能是告知客户端(vmc)进行用户认
 
 * 编辑`login.yml`，设定如下
 
-```
-	spring_profiles: ldap
-	ldap:
-	  base:
-	    url: 'ldap://your.domain.com:389/dc=domain,dc=com'
-	    userDnPattern: 'CN={0},ou=Employees, ou=Users' 
-```
+		spring_profiles: ldap
+		ldap:
+		  base:
+		    url: 'ldap://your.domain.com:389/dc=domain,dc=com'
+		    userDnPattern: 'CN={0},ou=Employees, ou=Users' 
+
   PS: 默认的userDnPattern是`uid={0},ou=people`,如果需要调整(如上设定)，需编辑[此处代码][10]为
   `<value>${ldap.base.userDnPattern:uid={0},ou=people}</value>`
 
 * 如果需要从LDAP向UAA导入用户，需要编辑`uaa.yml`，设定如下
 
-```
-    login
-  	  addnew: true
-```
+	    login
+	  	  addnew: true
+
 这样，Cloud Foundry就可以正确将用户登录信息向LDAP请求验证。
 
 ---
