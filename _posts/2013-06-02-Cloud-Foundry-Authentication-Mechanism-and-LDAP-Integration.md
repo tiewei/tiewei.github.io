@@ -5,7 +5,6 @@ tagline: "Cloud Foundry 认证机制与LDAP集成"
 description: "Cloud Foundry Authentication Mechanism"
 category: cloudfoundry
 tags: [Cloudfoundry, Authorization, LDAP]
-published: false
 ---
 {% include JB/setup %}
 
@@ -234,7 +233,7 @@ VCAP的控制组件V1版本，主要功能是告知客户端(vmc)进行用户认
 ```
 这样，Cloud Foundry就可以正确将用户登录信息向LDAP请求验证。
 
-
+---
 
 ## Reference:
 
