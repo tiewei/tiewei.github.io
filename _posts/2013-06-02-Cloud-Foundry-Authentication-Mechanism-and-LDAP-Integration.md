@@ -55,7 +55,7 @@ VCAP的控制组件V1版本，主要功能是告知客户端(vmc)进行用户认
 
 3. **vmc -> login-server : POST /oauth/authorize?client\_id=vmc&response\_type=token**
    
-   vmc根据先前获取的prompts信息提示用户输入用户名/密码，在请求body中包括了类似验证信息`credentials={"username":"foo","password":"bar"}`
+   vmc根据先前获取的prompts信息提示用户输入用户名/密码，在请求body中包括了类似验证信息`credentials={"username":"foo","password":"bar"}`，对于vmc-0.5.1及之后的版本包含的验证信息为`username=foo&password=bar&source=credentials`,处理过程和前者一致
 
 4. **login-server -> ldap**
 	
@@ -63,7 +63,7 @@ VCAP的控制组件V1版本，主要功能是告知客户端(vmc)进行用户认
 
 5. **login-server -> uaa : POST /oauth/authorize?client\_id=vmc&response\_type=token&source=login&username=foo**
    
-   请求的消息体在[RemoteUaaController#startAuthorization][17]中组装，通过`org.springframework.security.oauth2.client.OAuth2RestTemplate`发送请求，设置在[spring配置][18]中.HTTP HEAD中包含
+   请求的消息体在[RemoteUaaController#startAuthorization][17]中组装，通过`org.springframework.security.oauth2.client.OAuth2RestTemplate`发送请求，设置在[spring配置][18]中.HTTP body中包含
 
    `[{response_type=[token], redirect_uri=[https://uaa.cloudfoundry.com/redirect/vmc], client_id=[vmc], source=[login], username=[foo]}]`
 
@@ -190,6 +190,19 @@ VCAP的控制组件V1版本，主要功能是告知客户端(vmc)进行用户认
 
 实现虽然略显dirty，但是总归是能work了。
 
+另外，如果选用vmc-0.5.1版本的客户端，请求login-server时附带的body中包含的信息是`username=foo&password=bar&source=credentials`，这里在login-server请求处理`/oauth/authorize`时会有一点安全隐患 -- login-server会将用户的密码存入log (log级别是debug时)并发送给uaa，当采用外部认证的场景时，用户的密码或许会因为login-server的log而被利用。此处代码全部代码在[RemoteUaaController][32]中，关键片段如下：
+
+	if (principal != null) {
+			map.set("source", "login");
+			map.setAll(getLoginCredentials(principal));
+			map.remove("credentials"); // legacy vmc might break otherwise
+		}
+
+当请求是`credentials={"username":"foo","password":"bar"}`时，用户密码信息会被删除，然而0.5.1版本时则不会删除，解决办法很简单，加一行
+
+`map.remove("password");` 即可。
+
+ 
 ## 配置选项
 
 * 使用cloud controller的master分支，最新版加入了login-server的支持，[关键代码在此][7]
@@ -266,3 +279,4 @@ VCAP的控制组件V1版本，主要功能是告知客户端(vmc)进行用户认
 [29]: https://github.com/cloudfoundry/uaa/blob/master/common/src/main/java/org/cloudfoundry/identity/uaa/authentication/event/BadCredentialsListener.java#L38 "BadCredentialsListener" 
 [30]: https://github.com/cloudfoundry/uaa/blob/master/common/src/main/java/org/cloudfoundry/identity/uaa/audit/JdbcFailedLoginCountingAuditService.java#L41 "JdbcFailedLoginCountingAuditService"
 [31]: https://github.com/cloudfoundry/uaa/blob/master/common/src/main/java/org/cloudfoundry/identity/uaa/audit/LoggingAuditService.java#L92 "LoggingAuditService"
+[32]: https://github.com/cloudfoundry/login-server/blob/master/src/main/java/org/cloudfoundry/identity/uaa/login/RemoteUaaController.java#280 "RemoteUaaController#startAuthorization"
