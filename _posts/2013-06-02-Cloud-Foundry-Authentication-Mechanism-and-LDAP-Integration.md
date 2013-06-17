@@ -15,7 +15,8 @@ tags: [Cloudfoundry, Authorization, LDAP]
 Cloud Foundry 作为如今炙手可热的开源项目，借助其可以方便搭建企业内部PaaS平台，然而在集成时首先遇到的问题就是同企业内部系统中的授权系统（如LDAP）集成。与认证活动的相关的组件，主要有以下4个：
 
 1. **vmc** : 
-V1版客户端，由于V2近期将release，将采用cf客户端，但原理和功能与vmc一样，但由于最新的0.5.x在请求认证api上有些差异，不能正常请求login-server，本文所述方法vmc需要0.4.x或0.3.x版本。vmc是一个Ruby项目，代码见 <https://github.com/cloudfoundry/vmc>
+V1版客户端，由于V2近期将release，将采用cf客户端，但原理和功能与vmc一样，vmc是一个Ruby项目，代码见 <https://github.com/cloudfoundry/vmc>
+(**vmc-0.5.1已经可以正常工作**)
 2. **cloud_controller** :
 VCAP的控制组件V1版本，主要功能是告知客户端(vmc)进行用户认证请求的地址，并且根据用户TOKEN请求UAA认证。cloud\_controller是一个ROR项目，代码见 <https://github.com/cloudfoundry/cloud_controller>
 3. **uaa** :
