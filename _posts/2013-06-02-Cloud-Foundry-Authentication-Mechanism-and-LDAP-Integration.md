@@ -199,7 +199,6 @@ VCAP的控制组件V1版本，主要功能是告知客户端(vmc)进行用户认
 		}
 
 当请求是`credentials={"username":"foo","password":"bar"}`时，用户密码信息会被删除，然而0.5.1版本时则不会删除，解决办法很简单，加一行
-
 `map.remove("password");` 即可。
 
  
