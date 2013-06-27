@@ -57,74 +57,6 @@ v1版客户端，这里主要的操作就是利用`vmc push`将用户程序代�
 
 7. **dea -> router** : dea根据app的url向router注册，注册信息通过NATS传递
 
-		GET http://api.cf.com/apps/test check not named
-		GET http://api.cf.com/info get frameworks
-		GET http://api.cf.com/info/runtimes get runtimes
-		GET http://api.cf.com/info  get limits
-		POST http://api.cf.com/apps 
-		request {"name":"test","instances":1,"staging":{"model":"sinatra","stack":"ruby19"},"resources":{"memory":64}
-		response {
-		  "result": "success",
-		  "redirect": "http://api.cf.com/apps/test"
-		}
-		GET http://api.cf.com/apps/test
-		request {"name":"test","instances":1,"staging":{"model":"sinatra","stack":"ruby19"},"resources":{"memory":64}}
-		response
-		{
-		  "name": "test",
-		  "staging": {
-		    "model": "sinatra",
-		    "stack": "ruby19"
-		  },
-		  "uris": [
-
-		  ],
-		  "instances": 1,
-		  "runningInstances": 0,
-		  "resources": {
-		    "memory": 64,
-		    "disk": 2048,
-		    "fds": 256
-		  },
-		  "state": "STOPPED",
-		  "services": [
-
-		  ],
-		  "version": "47bfb5b4433f70629c4e02559b55ec38-0",
-		  "env": [
-
-		  ],
-		  "meta": {
-		    "debug": null,
-		    "console": null,
-		    "version": 1,
-		    "created": 1372217637
-		  }
-		}
-		PUT http://api.cf.com/apps/test
-		 {"name":"test","instances":1,"state":"STOPPED","staging":{"model":"sinatra","stack":"ruby19"},"resources":{"memory":64,"disk":2048,"fds":256},"env":[],"uris":["test.cf.com"],"services":[],"console":null,"debug":null}
-
-		POST http://api.cf.com/apps/test/application upload
-		{:_method=>"put", :resources=>"[]", :application=>#<UploadIO:0x0000000180d788 @content_type="application/zip", @original_filename="test.zip", @local_path="/tmp/test.zip", @io=#<File:/tmp/test.zip>, @opts={}>}
-
-		 PUT http://api.cf.com/apps/test
-		 {"name":"test","instances":1,"state":"STARTED","staging":{"model":"sinatra","stack":"ruby18"},"resources":{"memory":64,"disk":2048,"fds":256},"env":[],"uris":["test.cf.com"],"services":[],"console":null,"debug":null}
-		 GET http://api.cf.com/apps/test/instances
-		 RESPONSE_BODY:
-		{
-		  "instances": [
-		    {
-		      "index": 0,
-		      "state": "RUNNING",
-		      "since": 1372217907,
-		      "debug_ip": null,
-		      "debug_port": null,
-		      "console_ip": null,
-		      "console_port": null
-		    }
-		  ]
-		}
-
 ## 代码分析
 
 上一节简要介绍了工作流程，本节从代码内部，详细分析工作流程中的关键步骤。
@@ -212,3 +144,77 @@ vmc 将用户app的代码打包成zip，调用REST API上传zip包.这里上传�
 `if app.respond_to?("buildpack") and buildpack = app.buildpack`
 
 本人已经将此bug fix提交给repo的owner，pull request见此<https://github.com/cloudfoundry/manifests-vmc-plugin/pull/4>。
+
+
+
+
+
+
+
+		GET http://api.cf.com/apps/test check not named
+		GET http://api.cf.com/info get frameworks
+		GET http://api.cf.com/info/runtimes get runtimes
+		GET http://api.cf.com/info  get limits
+		POST http://api.cf.com/apps 
+		request {"name":"test","instances":1,"staging":{"model":"sinatra","stack":"ruby19"},"resources":{"memory":64}
+		response {
+		  "result": "success",
+		  "redirect": "http://api.cf.com/apps/test"
+		}
+		GET http://api.cf.com/apps/test
+		request {"name":"test","instances":1,"staging":{"model":"sinatra","stack":"ruby19"},"resources":{"memory":64}}
+		response
+		{
+		  "name": "test",
+		  "staging": {
+		    "model": "sinatra",
+		    "stack": "ruby19"
+		  },
+		  "uris": [
+
+		  ],
+		  "instances": 1,
+		  "runningInstances": 0,
+		  "resources": {
+		    "memory": 64,
+		    "disk": 2048,
+		    "fds": 256
+		  },
+		  "state": "STOPPED",
+		  "services": [
+
+		  ],
+		  "version": "47bfb5b4433f70629c4e02559b55ec38-0",
+		  "env": [
+
+		  ],
+		  "meta": {
+		    "debug": null,
+		    "console": null,
+		    "version": 1,
+		    "created": 1372217637
+		  }
+		}
+		PUT http://api.cf.com/apps/test
+		 {"name":"test","instances":1,"state":"STOPPED","staging":{"model":"sinatra","stack":"ruby19"},"resources":{"memory":64,"disk":2048,"fds":256},"env":[],"uris":["test.cf.com"],"services":[],"console":null,"debug":null}
+
+		POST http://api.cf.com/apps/test/application upload
+		{:_method=>"put", :resources=>"[]", :application=>#<UploadIO:0x0000000180d788 @content_type="application/zip", @original_filename="test.zip", @local_path="/tmp/test.zip", @io=#<File:/tmp/test.zip>, @opts={}>}
+
+		 PUT http://api.cf.com/apps/test
+		 {"name":"test","instances":1,"state":"STARTED","staging":{"model":"sinatra","stack":"ruby18"},"resources":{"memory":64,"disk":2048,"fds":256},"env":[],"uris":["test.cf.com"],"services":[],"console":null,"debug":null}
+		 GET http://api.cf.com/apps/test/instances
+		 RESPONSE_BODY:
+		{
+		  "instances": [
+		    {
+		      "index": 0,
+		      "state": "RUNNING",
+		      "since": 1372217907,
+		      "debug_ip": null,
+		      "debug_port": null,
+		      "console_ip": null,
+		      "console_port": null
+		    }
+		  ]
+		}
