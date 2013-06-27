@@ -65,7 +65,11 @@ v1版客户端，这里主要的操作就是利用`vmc push`将用户程序代�
 
 由于create/update app的过程十分相似，因此，我们首先介绍上传app的过程。
 
-vmc 将用户app的代码打包成zip，调用REST API上传zip包.这里上传的zip包中只包括更新部分的文件，如果文件的fingerprints在cc中已经存在，则在zip包中不会包含这些文件，并在HTTP HEAD中resources中标注这些已经在cc中的资源
+vmc 将用户app的代码打包成zip，调用REST API上传zip包.这里上传的zip包中只包括更新部分的文件，如果文件的fingerprints在cc中已经存在，则在zip包中不会包含这些文件，并在HTTP HEAD中resources中标注这些已经在cc中的资源。
+
+resources的元素是一个HASH `{ :size => size, :sha1 => Digest::SHA1.file(filename).hexdigest, :fn => ./path/filename}`
+
+请求信息实例如下
 
 	POST http://api.cf.com/apps/:app/application
 	{:_method=>"put", :resources=>"[]", :application=>#<UploadIO:0x0000000180d788 @content_type="application/zip", @original_filename="test.zip", @local_path="/tmp/test.zip", @io=#<File:/tmp/test.zip>, @opts={}>}
@@ -84,7 +88,7 @@ vmc 将用户app的代码打包成zip，调用REST API上传zip包.这里上传�
 	   ...
   	end
 
- 这里将上传对应的app与上传的文件关联新建一个AppPackage对象。
+这里将上传对应的app与上传的文件关联新建一个AppPackage对象。
 
 `latest_bits_from(app_package)`-[github](https://github.com/cloudfoundry/cloud_controller/blob/master/cloud_controller/models/app.rb#L326)
 	
@@ -121,10 +125,26 @@ vmc 将用户app的代码打包成zip，调用REST API上传zip包.这里上传�
       FileUtils.rm_rf(File.dirname(path)) if path
     end
 
-此处在`check_package_size`检查package的大小是否超过限制(config中的`max_droplet_size`，默认512M)，`unpack_upload`将zip包解压，将其复制到resource pool
+此处在`check_package_size`检查package的大小是否超过限制(config中的`max_droplet_size`，默认512M)，`unpack_upload`将zip包解压到tmp文件夹，`synchronize_pool_with`将其同步到resource pool(这是resource pool是基于文件系统的实现即`FilesystemPool`，跟根目录是`AppConfig[:directories][:resources]`，可扩展至其他存储，只需继承`ResourcePool`)
 
+    def synchronize_pool_with(working_dir)
+      timed_section(CloudController.logger, 'process_app_resources') do
+        AppPackage.blocking_defer do
+          pool = CloudController.resource_pool
+          pool.add_directory(working_dir)
+          @resource_descriptors.each do |descriptor|
+            create_dir_skeleton(working_dir, descriptor[:fn])
+            path = resolve_path(working_dir, descriptor[:fn])
+            pool.copy(descriptor, path)
+          end
+        end
+      end
+    ...
+    end
 
+由代码可见其将解压后的zip包文件夹`working_dir`同resource pool进行了同步。有两个操作，`add_directory`将`workdir`中的文件(非文件夹)路径计算出sha1值(`Digest::SHA1.file(path).hexdigest`与vmc计算方法一致)，然后根据sha1值进行计算(`FilesystemPool#path_from_sha1`)出一个形如`/resources_pool_root/MOD#1/MOD#2/SHA1`的文件路径`resource_path`，然后复制该文件到`resource_path`。另外一个操作就是恢复没有上传的已经存在`resources_pool`中的文件：`create_dir_skeleton`创建其所在文件夹`resolve_path`获得该文件应该在package中的文件路径，然后复制到package中，将解压后的文件夹package恢复成拥有全部应有文件的状态.之后重新打包成zip文件，将此zip文件计算出sha1值，保存为`package_dir/app_#{@app.id}`文件(`package_dir`为`AppConfig[:directories][:droplets]`)，并在数据库中更新`package_hash`为最新的sha1值。最后删除所有的临时文件(夹)。
 
+至此，更新/新建的app package经过解压-同步-压缩-移动几个步骤，完整地保存在`package_dir/app_#{@app.id}"`中了。这里可以看出resources pool的功能主要就是保存已经上传的代码，防止重复的文件上传，然而这个处理方法显然不如openshift的使用git进行版本控制的方法方便，不知在cc\_ng中是否改善，待分析完cc\_ng再做评论。
 
 
 ### Step2: create/update app in cc
