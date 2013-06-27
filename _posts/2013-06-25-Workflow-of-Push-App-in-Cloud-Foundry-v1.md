@@ -133,14 +133,13 @@ v1版客户端，这里主要的操作就是利用`vmc push`将用户程序代�
 
 由于create/update app的过程十分相似，因此，我们首先介绍上传app的过程。
 
-vmc 将用户app的代码打包成zip，调用REST API上传zip包.
+vmc 将用户app的代码打包成zip，调用REST API上传zip包.这里上传的zip包中只包括更新部分的文件，如果文件的fingerprints在cc中已经存在，则在zip包中不会包含这些文件，并在HTTP HEAD中resources中标注这些已经在cc中的资源
 
 	POST http://api.cf.com/apps/:app/application
 	{:_method=>"put", :resources=>"[]", :application=>#<UploadIO:0x0000000180d788 @content_type="application/zip", @original_filename="test.zip", @local_path="/tmp/test.zip", @io=#<File:/tmp/test.zip>, @opts={}>}
 	其中test为app的name
 
 根据cc的`routes.rb`([github](https://github.com/cloudfoundry/cloud_controller/blob/master/cloud_controller/config/routes.rb#L20))，处理代码如下：
-	
 
 `AppsController#upload`-[github](https://github.com/cloudfoundry/cloud_controller/blob/master/cloud_controller/app/controllers/apps_controller.rb#L79)
 
@@ -152,6 +151,8 @@ vmc 将用户app的代码打包成zip，调用REST API上传zip包.
 	      @app.latest_bits_from(package)
 	   ...
   	end
+
+ 这里将上传对应的app与上传的文件关联新建一个AppPackage对象。
 
 `latest_bits_from(app_package)`-[github](https://github.com/cloudfoundry/cloud_controller/blob/master/cloud_controller/models/app.rb#L326)
 	
@@ -168,11 +169,27 @@ vmc 将用户app的代码打包成zip，调用REST API上传zip包.
       end
     end
 
-`AppPackage#initialize`-[github](https://github.com/cloudfoundry/cloud_controller/blob/master/cloud_controller/models/app_package.rb#L7)
+将对上传的文件利用`to_zip`方法进行处理，得出sha的值，并根据该值与数据库中app关联的package进行比较，如果不同，则更新sha值并将package_state设为PENDING状态
 
-	
+`AppPackage#to_zip`-[github](https://github.com/cloudfoundry/cloud_controller/blob/master/cloud_controller/models/app_package.rb#L7)
 
+    def to_zip
+      tmpdir = Dir.mktmpdir
+      dir = path = nil
+      check_package_size
+      timed_section(CloudController.logger, 'app_to_zip') do
+        dir = unpack_upload
+        synchronize_pool_with(dir)
+        path = AppPackage.repack_app_in(dir, tmpdir, :zip)
+        sha1 = save_package(path) if path
+      end
+    ensure
+      FileUtils.rm_rf(tmpdir)
+      FileUtils.rm_rf(dir) if dir
+      FileUtils.rm_rf(File.dirname(path)) if path
+    end
 
+此处在`check_package_size`检查package的大小是否超过限制(config中的`max_droplet_size`，默认512M)，`unpack_upload`将zip包解压，将其复制到resource pool
 
 
 
