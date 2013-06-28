@@ -5,7 +5,7 @@ tagline : "Cloud Foundry V1版本中部署应用的工作流程"
 description: "Workflow of Push App in Cloud Foundry v1"
 category: cloudfoundry
 tags: [Cloudfoundry, cloud_controller, stager, dea]
-published: true
+published: false
 ---
 {% include JB/setup %}
 
