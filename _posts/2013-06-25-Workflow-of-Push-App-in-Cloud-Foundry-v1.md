@@ -5,7 +5,7 @@ tagline : "Cloud Foundry V1版本中部署应用的工作流程"
 description: "Workflow of Push App in Cloud Foundry v1"
 category: cloudfoundry
 tags: [Cloudfoundry, cloud_controller, stager, dea]
-published: false
+published: true
 ---
 {% include JB/setup %}
 
@@ -43,7 +43,7 @@ v1版客户端，这里主要的操作就是利用`vmc push`将用户程序代�
 
 ## PUSH APP时组件操作概述
 
-1. **vmc -> cloud_controller** : vmc根据用户代码新建app -> 上传用户app代码，此处通过REST API交互
+1. **vmc -> cloud_controller** : vmc根据用户代码新建app -> 更新url/memery等信息(state=STOPPED) -> 上传用户app代码，此处通过REST API交互
 
 2. **cloud_controller** : cc响应vmc请求，创建app，存储app代码
 
@@ -51,7 +51,7 @@ v1版客户端，这里主要的操作就是利用`vmc push`将用户程序代�
 
 4. **stager  -> cloud_controller** : 接收到消息的stager根据消息中的download\_uri从cc下载app的代码包，并利用vcap-staging制作droplet，完成后将droplet上传至cc。vcap-staging完成了整个部署APP过程中其中最为关键的操作，包括下载/安装/上传依赖包，打包运行环境，编辑start/stop脚本等，代码见<https://github.com/cloudfoundry/vcap-staging>
 
-5. **vmc -> cloud_controller** : vmc向cc发送启动命令，在等待启动过程中(step 6-7)，通过REST API `GET /apps/test/instances`获取启动状态
+5. **vmc -> cloud_controller** : vmc向cc发送启动命令(state=STARTED)，在等待启动过程中(step 6-7)，通过REST API `GET /apps/test/instances`获取启动状态
 
 6. **cloud_controller -> dea** : cc在NAT上发布消息寻找合适的dea，dea接收消息后下载droplet，并根据设定的resources限额启动droplet，并在NAT上发布运行状态
 
@@ -79,81 +79,324 @@ resources的元素是一个HASH `{ :size => size, :sha1 => Digest::SHA1.file(fil
 
 `AppsController#upload`-[github](https://github.com/cloudfoundry/cloud_controller/blob/master/cloud_controller/app/controllers/apps_controller.rb#L79)
 
-	def upload
-	   ...
-	      file = get_uploaded_file
-	      resources = json_param(:resources)
-	      package = AppPackage.new(@app, file, resources)
-	      @app.latest_bits_from(package)
-	   ...
-  	end
+{% highlight ruby linenos %}
+
+def upload
+   ...
+      file = get_uploaded_file
+      resources = json_param(:resources)
+      package = AppPackage.new(@app, file, resources)
+      @app.latest_bits_from(package)
+   ...
+end
+
+{% endhighlight %}
 
 这里将上传对应的app与上传的文件关联新建一个AppPackage对象。
 
 `latest_bits_from(app_package)`-[github](https://github.com/cloudfoundry/cloud_controller/blob/master/cloud_controller/models/app.rb#L326)
 	
-	def latest_bits_from(app_package)
-      sha1 = app_package.to_zip 
-      unless self.package_hash == sha1
-        ...
-        unless self.package_hash.nil?
-          FileUtils.rm_f(self.legacy_unstaged_package_path)
-        end
-        self.package_state = 'PENDING'
-        self.package_hash = sha1
-        save!
-      end
+{% highlight ruby linenos %}
+
+def latest_bits_from(app_package)
+  sha1 = app_package.to_zip 
+  unless self.package_hash == sha1
+    ...
+    unless self.package_hash.nil?
+      FileUtils.rm_f(self.legacy_unstaged_package_path)
     end
+    self.package_state = 'PENDING'
+    self.package_hash = sha1
+    save!
+  end
+end
+
+{% endhighlight %}
 
 将对上传的文件利用`to_zip`方法进行处理，得出sha的值，并根据该值与数据库中app关联的package进行比较，如果不同，则更新sha值并将package_state设为PENDING状态
 
 `AppPackage#to_zip`-[github](https://github.com/cloudfoundry/cloud_controller/blob/master/cloud_controller/models/app_package.rb#L7)
 
-    def to_zip
-      tmpdir = Dir.mktmpdir
-      dir = path = nil
-      check_package_size
-      timed_section(CloudController.logger, 'app_to_zip') do
-        dir = unpack_upload
-        synchronize_pool_with(dir)
-        path = AppPackage.repack_app_in(dir, tmpdir, :zip)
-        sha1 = save_package(path) if path
-      end
-    ensure
-      FileUtils.rm_rf(tmpdir)
-      FileUtils.rm_rf(dir) if dir
-      FileUtils.rm_rf(File.dirname(path)) if path
-    end
+{% highlight ruby linenos %}
+
+def to_zip
+  tmpdir = Dir.mktmpdir
+  dir = path = nil
+  check_package_size
+  timed_section(CloudController.logger, 'app_to_zip') do
+    dir = unpack_upload
+    synchronize_pool_with(dir)
+    path = AppPackage.repack_app_in(dir, tmpdir, :zip)
+    sha1 = save_package(path) if path
+  end
+ensure
+  FileUtils.rm_rf(tmpdir)
+  FileUtils.rm_rf(dir) if dir
+  FileUtils.rm_rf(File.dirname(path)) if path
+end
+
+{% endhighlight %}
 
 此处在`check_package_size`检查package的大小是否超过限制(config中的`max_droplet_size`，默认512M)，`unpack_upload`将zip包解压到tmp文件夹，`synchronize_pool_with`将其同步到resource pool(这是resource pool是基于文件系统的实现即`FilesystemPool`，跟根目录是`AppConfig[:directories][:resources]`，可扩展至其他存储，只需继承`ResourcePool`)
 
-    def synchronize_pool_with(working_dir)
-      timed_section(CloudController.logger, 'process_app_resources') do
-        AppPackage.blocking_defer do
-          pool = CloudController.resource_pool
-          pool.add_directory(working_dir)
-          @resource_descriptors.each do |descriptor|
-            create_dir_skeleton(working_dir, descriptor[:fn])
-            path = resolve_path(working_dir, descriptor[:fn])
-            pool.copy(descriptor, path)
-          end
-        end
+{% highlight ruby linenos %}
+
+def synchronize_pool_with(working_dir)
+  timed_section(CloudController.logger, 'process_app_resources') do
+    AppPackage.blocking_defer do
+      pool = CloudController.resource_pool
+      pool.add_directory(working_dir)
+      @resource_descriptors.each do |descriptor|
+        create_dir_skeleton(working_dir, descriptor[:fn])
+        path = resolve_path(working_dir, descriptor[:fn])
+        pool.copy(descriptor, path)
       end
-    ...
     end
+  end
+  ...
+end
+
+{% endhighlight %}
+
 
 由代码可见其将解压后的zip包文件夹`working_dir`同resource pool进行了同步。有两个操作，`add_directory`将`workdir`中的文件(非文件夹)路径计算出sha1值(`Digest::SHA1.file(path).hexdigest`与vmc计算方法一致)，然后根据sha1值进行计算(`FilesystemPool#path_from_sha1`)出一个形如`/resources_pool_root/MOD#1/MOD#2/SHA1`的文件路径`resource_path`，然后复制该文件到`resource_path`。另外一个操作就是恢复没有上传的已经存在`resources_pool`中的文件：`create_dir_skeleton`创建其所在文件夹`resolve_path`获得该文件应该在package中的文件路径，然后复制到package中，将解压后的文件夹package恢复成拥有全部应有文件的状态.之后重新打包成zip文件，将此zip文件计算出sha1值，保存为`package_dir/app_#{@app.id}`文件(`package_dir`为`AppConfig[:directories][:droplets]`)，并在数据库中更新`package_hash`为最新的sha1值。最后删除所有的临时文件(夹)。
 
-至此，更新/新建的app package经过解压-同步-压缩-移动几个步骤，完整地保存在`package_dir/app_#{@app.id}"`中了。这里可以看出resources pool的功能主要就是保存已经上传的代码，防止重复的文件上传，然而这个处理方法显然不如openshift的使用git进行版本控制的方法方便，不知在cc\_ng中是否改善，待分析完cc\_ng再做评论。
-
+至此，更新/新建的app package经过解压-同步-压缩-移动几个步骤，完整地保存在`package_dir/app_#{@app.id}"`中了。这里可以看出resources pool的功能主要就是保存已经上传的代码，防止重复的文件上传，然而这个处理方法显然不如openshift的使用git进行版本控制的方法方便，不知在cc\_ng中是否改善，待分析完cc\_ng代码后再做评论。
 
 ### Step2: create/update app in cc
 
+新建/更新app的请求示例如下
+
+	POST http://api.cf.com/apps 
+	request {"name":"{:app}","instances":1,"staging":{"model":"sinatra","stack":"ruby19"},"resources":{"memory":64}
+
+	PUT http://api.cf.com/apps/{:app}
+	{"name":"test","instances":1,"state":"STARTED","staging":{"model":"sinatra","stack":"ruby18"},"resources":{"memory":64,"disk":2048,"fds":256},"env":[],"uris":["test.cf.com"],"services":[],"console":null,"debug":null}
+
+根据cc的`routes.rb`， 请求将由`AppsController#create`和`AppsController#update`处理，其核心部分是`AppsController#update_app_from_params(app)`，代码如下
+
+{% highlight ruby linenos%}
+
+# Checks to make sure the update can proceed, then updates the given
+# App from the request params and makes the necessary AppManager calls.
+def update_app_from_params(app)
+  CloudController.logger.debug "app: #{app.id || "nil"} update_from_parms"
+  error_on_lock_mismatch(app)
+  app.lock_version += 1
+
+  previous_state = app.state
+  update_app_state(app)
+  # State needs to be changed from above before capacity check.
+  check_has_capacity_for?(app, previous_state)
+  check_app_uris(app)
+  update_app_mem(app)
+  update_app_env(app)
+  update_app_staging(app)
+  delta_instances = update_app_instances(app)
+
+  changed = app.changed
+  CloudController.logger.debug "app: #{app.id} Updating #{changed.inspect}"
+
+  # reject attempts to start in debug mode if debugging is disabled
+  if body_params[:debug] and app.state == 'STARTED' and !AppConfig[:allow_debug]
+    raise CloudError.new(CloudError::APP_DEBUG_DISALLOWED)
+  end
+
+  app.metadata[:debug] = body_params[:debug] if body_params
+  app.metadata[:console] = body_params[:console] if body_params
+
+  # 'app.save' can actually raise an exception, if whatever is
+  # invalid happens all the way down at the DB layer.
+  begin
+    app.save!
+  rescue Exception => e
+    CloudController.logger.error "app: #{app.id} Failed to save new app errors: #{app.errors}.  Exception: #{e}"
+    raise CloudError.new(CloudError::APP_INVALID)
+  end
+
+  # This needs to be called after the app is saved, but before staging.
+  update_app_services(app)
+  app.save if app.changed?
+
+  # Process any changes that require action on out part here.
+  manager = AppManager.new(app)
+
+  stage_app(app) if app.needs_staging?
+
+  if changed.include?('state')
+    if app.stopped?
+      manager.stopped
+    elsif app.started?
+      manager.started
+    end
+    manager.updated
+  elsif app.started?
+    # Instances (up or down) and uris we will handle in place, since it does not
+    # involve staging changes.
+    if changed.include?('instances')
+      manager.change_running_instances(delta_instances)
+      manager.updated
+
+      user_email = user ? user.email : 'N/A'
+      CloudController.events.user_event(user_email, app.name, "Changing instances to #{app.instances}", :SUCCEEDED)
+
+    end
+  end
+
+  # Now add in URLs
+  manager.update_uris if update_app_uris(app)
+
+  yield(app) if block_given?
+end
+
+{% endhighlight %}
+
+前40行的逻辑非常简单，根据request中的参数，更新db中app对象的url,mem,env,runtime,framework,services信息，并更新到数据库中，接下来分为几个详细的步骤
+
+1. **stage_app** 将app打包成droplet，可以供dea执行。作为cc只是将此消息在NAT上通知stager
+2. **stager** 将实际处理打包任务，下载app->打包->上传
+3. **start/stop app instance** 启动/停止dea中的app的instance或调整instance数量符合用户需求
+
+最终`AppManager#update_uris`会将更新的url在NAT上通知dea，dea接收新的url后将droplet注册到routers，后续对该url的请求都会路由到对应的dea中执行。
+
 ### Step3: publish message to stage in cc
+
+`AppsController#stage_app`的逻辑非常简单，就是利用`StagingController`生成download url 和upload url以便stager下载app code以及上传droplet，当stager完成后，将droplet移动到`package_dir/droplet_#{@app.id}`，并更新`package_state`为`STAGED`(如果打包失败，则为`FAILED`)
+
+这里代码比较简单，就不详细介绍，但是我们需要介绍一下cc发送到NAT的消息，topic=`AppConfig[:staging][:queue]`。内容说明如下：
+
+{% highlight ruby linenos%}
+
+{
+    "app_id"       => app.id,
+    "properties"   => app.staging_task_properties,
+    "download_uri" => dl_uri, # /staging/app/#{app.id}
+    "upload_uri"   => ul_hdl.upload_uri, # /staging/droplet/#{app.id}/#{VCAP.secure_uuid}
+}
+
+{% endhighlight %}
+
+其中 `app.staging_task_properties` 如下
+
+{% highlight ruby linenos%}
+
+{    
+	"services"       => services,
+    "framework"      => framework,
+    "framework_info" => Framework.find(framework).options,
+    "runtime"        => runtime,
+    "runtime_info"   => Runtime.find(runtime).options,
+    "resources"      => resource_requirements,
+    "environment"    => environment,
+    "meta" => metadata 
+}
+{% endhighlight %}
+
+这里暂时不讨论包含services的情况，所以services={}
+framework和runtime对应request中的`model`和`stack`；
+resources = `{"memory" => memory, "disk" => disk_quota, "fds" => file_descriptors}`，指明资源的限制;
+environment和meta分别对应request中的`env`和`meta`，后者默认为[]。
+
+`Framework.find(framework).options`的值来自于`AppConfig[:directories][:staging_manifests]/{framework_name}.yml`。
+
+`Runtime.find(runtime).options`的值来自于`AppConfig[:runtimes_file]`，值为对应runtime下的HASH
+
+示例的message如下
+
+
+
 
 ### Step4: stage app in stager
 
-### Step5: publish message to start/stop instance
+stager节点主要包含两个项目`stager`和`vcap-staging`，前者接收cc的消息，启动后者进行实际的打包工作。
+
+处理`AppConfig[:staging][:queue]`topic 的方法为`VCAP::Stager::Server#execute_request(encoded_request, reply_to)`，会根据message建立一个`VCAP::Stager::Task`实例，并执行其`preform`方法。
+
+{% highlight ruby linenos%}
+
+  def perform
+    @logger.info("Starting task for request: #{@request}")
+
+    @task_logger.info("Setting up temporary directories")
+    workspace = VCAP::Stager::Workspace.create
+
+    @task_logger.info("Downloading application")
+    app_path = File.join(workspace.root_dir, "app.zip")
+    download_app(app_path)
+
+    @task_logger.info("Unpacking application")
+    unpack_app(app_path, workspace.unstaged_dir)
+
+    @task_logger.info("Staging application")
+    stage_app(workspace.unstaged_dir, workspace.staged_dir, @task_logger)
+
+    @task_logger.info("Creating droplet")
+    droplet_path = File.join(workspace.root_dir, "droplet.tgz")
+    create_droplet(workspace.staged_dir, droplet_path)
+
+    @task_logger.info("Uploading droplet")
+    upload_droplet(droplet_path)
+
+    @task_logger.info("Done!")
+
+    nil
+
+  ensure
+    workspace.destroy if workspace
+  end
+
+{% endhighlight %}
+
+ 经过了6步处理
+
+ 1. `VCAP::Stager::Workspace.create`会创建用于处理stage任务的文件夹，形如：
+
+ 	root_dir=	    .
+	unstaged_dir=	├── unstaged/
+	staged_dir=	    └── staged/
+ 
+ 2. `download_app`根据message中的`download_uri`利用curl下载app的code zip包，保存至`root_dir/app.zip`
+
+ 3. `unpack_app`利用`unzip`解压app的代码包到unstaged_dir中
+
+ 4. `stage_app(workspace.unstaged_dir, workspace.staged_dir, @task_logger)`将unstaged\_dir中的代码进行调整，安装需要的包和添加开始/停止脚本等，并将未压缩的droplet保存到staged\_dir
+
+ 5. `create_droplet`将staged\_dir中的文件打包成droplet.tgz保存在root\_dir中
+
+ 6. `upload_droplet`根据message中的`upload_uri`上传生成的droplet.zip
+
+ 可见核心部分在`stage_app`方法上，如果分析代码会发现，实际上执行的就是一条shell命令
+
+ `cmd = [@ruby_path, @run_plugin_path, @request["properties"]["framework_info"]["name"], plugin_config_file.path].join(" ")`
+ 
+ 即执行 `ruby path_to_stager/bin/run_plugin framework_name file_of_opinion`.其中`file_of_opinion`包含的信息如下
+
+{% highlight ruby linenos%}
+
+ {
+    "source_dir"   => src_dir,
+    "dest_dir"     => dst_dir,
+    "environment"  => @request["properties"]
+    "secure_user"  => {"uid" => secure_user[:uid],
+				      "gid" => secure_user[:gid], }
+ }
+
+{% endhighlight %}
+
+其中`run_plugin`关键内容如下
+{% highlight ruby linenos%}
+
+plugin_name, config_path = ARGV
+
+klass  = StagingPlugin.load_plugin_for(plugin_name)
+plugin = klass.from_file(config_path)
+plugin.stage_application
+
+{% endhighlight %}
+
+这里我们举sinatra/ruby18为例子说明制作droplet的过程。
+
+### Step5: Start/stop instance
 
 ## Troube Shooting
 
