@@ -13,6 +13,10 @@ published: false
 
 Cloud Foundry作为开源PaaS平台，对外提供的核心功能主要有两种 —— 为用户代码提供运行环境(runtime/framework)和为用户代码提供常用服务(数据库/消息队列等)。前者加上用户代码在Cloud Foundry的术语中称作一个Droplet，后者称为Service。本文介绍前者的主要工作流程，后者将写专文介绍。
 
+>> 提醒 - 本文篇幅较长，代码较多，第三节细节较多
+
+---
+
 ## Cloud Foundry APP 相关组件
 
 当用户push一个app给Cloud Foundry，到最终app能够正常运行，主要由以下7个组件协同工作：
@@ -24,7 +28,7 @@ v1版客户端，这里主要的操作就是利用`vmc push`将用户程序代�
 核心组件，Cloud Foundry内部的消息队列服务，cloud\_controller, stager, dea, health\_manager\_next之间的消息请求都是在消息队列中发送的。在Cloud Foundry中是一个存在单点失败(single points of failure - SPOF)的节点，如何避免SPOF的问题已经有一些讨论，见<https://github.com/cloudfoundry/cf-release/issues/32>
 
 3. **cloud\_controller** (下简称cc):
-核心组件，Cloud Foundry响应用户请求的节点，可以很好的横向扩展，是一个ROR项目。在部署应用的过程中主要是响应用户请求，管理用户代码，请求stager和dea进行app的部署，并订阅health\_manager\_next的消息，响应用户查看app状态的请求。该节点在Cloud Foundry中可以很方便地横向扩展，代码见 <https://github.com/cloudfoundry/cloud_controller>.
+核心组件，Cloud Foundry响应用户请求的节点，可以很好的横向扩展，是一个ROR项目。在部署应用的过程中主要是响应用户请求，管理用户代码，请求stager和dea进行app的部署，并订阅health\_manager\_next的消息，响应用户查看app状态的请求。该节点在Cloud Foundry中可以很方便地横向扩展，代码见<https://github.com/cloudfoundry/cloud_controller>.
 
 4. **stager** :
 核心组件，Cloud Foundry中将用户代码和runtime/framework结合起来生成droplet的关键节点。目前提供java, ruby, python等rumtime，以及node.js,play, rake, rails, sinatra, java\_web等很多framework(java\_web就是提供了tomcat容器)。可扩展，代码见<https://github.com/cloudfoundry/stager>
@@ -41,7 +45,11 @@ v1版客户端，这里主要的操作就是利用`vmc push`将用户程序代�
 8. **router**:
 必须组件，当APP部署完成后，dea向router注册app的url，未来向该app发送的访问请求(url=xxx.cf.com)都会被转发至对应的dea处理，而操作请求(url=api.cf.com/apps/xxx)仍然转发至cc处理
 
+---
+
 ## PUSH APP时组件操作概述
+
+![Cloud Foundry v1 Push App](/images/CF-v1-push-app.png "cloud-foundry-v1-push-app")
 
 1. **vmc -> cloud_controller** : vmc根据用户代码新建app -> 更新url/memery等信息(state=STOPPED) -> 上传用户app代码，此处通过REST API交互
 
@@ -57,9 +65,12 @@ v1版客户端，这里主要的操作就是利用`vmc push`将用户程序代�
 
 7. **dea -> router** : dea根据app的url向router注册，注册信息通过NATS传递
 
+---
+
 ## 代码分析
 
 上一节简要介绍了工作流程，本节从代码内部，详细分析工作流程中的关键步骤。
+
 
 ### Step1: upload app code in cc 
 
@@ -163,6 +174,7 @@ end
 
 至此，更新/新建的app package经过解压-同步-压缩-移动几个步骤，完整地保存在`package_dir/app_#{@app.id}"`中了。这里可以看出resources pool的功能主要就是保存已经上传的代码，防止重复的文件上传，然而这个处理方法显然不如openshift的使用git进行版本控制的方法方便，不知在cc\_ng中是否改善，待分析完cc\_ng代码后再做评论。
 
+
 ### Step2: create/update app in cc
 
 新建/更新app的请求示例如下
@@ -259,6 +271,7 @@ end
 
 最终`AppManager#update_uris`会将更新的url在NAT上通知dea，dea接收新的url后将droplet注册到routers，后续对该url的请求都会路由到对应的dea中执行。
 
+
 ### Step3: publish message to stage in cc
 
 `AppsController#stage_app`的逻辑非常简单，就是利用`StagingController`生成download url 和upload url以便stager下载app code以及上传droplet，当stager完成后，将droplet移动到`package_dir/droplet_#{@app.id}`，并更新`package_state`为`STAGED`(如果打包失败，则为`FAILED`)
@@ -282,13 +295,13 @@ end
 
 {    
 	"services"       => services,
-    "framework"      => framework,
-    "framework_info" => Framework.find(framework).options,
-    "runtime"        => runtime,
-    "runtime_info"   => Runtime.find(runtime).options,
-    "resources"      => resource_requirements,
-    "environment"    => environment,
-    "meta" => metadata 
+  "framework"      => framework,
+  "framework_info" => Framework.find(framework).options,
+  "runtime"        => runtime,
+  "runtime_info"   => Runtime.find(runtime).options,
+  "resources"      => resource_requirements,
+  "environment"    => environment,
+  "meta" => metadata 
 }
 {% endhighlight %}
 
@@ -300,10 +313,6 @@ environment和meta分别对应request中的`env`和`meta`，后者默认为[]。
 `Framework.find(framework).options`的值来自于`AppConfig[:directories][:staging_manifests]/{framework_name}.yml`。
 
 `Runtime.find(runtime).options`的值来自于`AppConfig[:runtimes_file]`，值为对应runtime下的HASH
-
-示例的message如下
-
-
 
 
 ### Step4: stage app in stager
@@ -351,9 +360,9 @@ stager节点主要包含两个项目`stager`和`vcap-staging`，前者接收cc�
 
  1. `VCAP::Stager::Workspace.create`会创建用于处理stage任务的文件夹，形如：
 
- 	root_dir=	    .
-	unstaged_dir=	├── unstaged/
-	staged_dir=	    └── staged/
+     	    root_dir=	  .
+    	unstaged_dir=	  ├── unstaged/
+    	  staged_dir=	  └── staged/
  
  2. `download_app`根据message中的`download_uri`利用curl下载app的code zip包，保存至`root_dir/app.zip`
 
@@ -374,8 +383,8 @@ stager节点主要包含两个项目`stager`和`vcap-staging`，前者接收cc�
 {% highlight ruby linenos%}
 
  {
-    "source_dir"   => src_dir,
-    "dest_dir"     => dst_dir,
+    "source_dir"   => unstaged_dir,
+    "dest_dir"     => staged_dir,
     "environment"  => @request["properties"]
     "secure_user"  => {"uid" => secure_user[:uid],
 				      "gid" => secure_user[:gid], }
@@ -384,6 +393,7 @@ stager节点主要包含两个项目`stager`和`vcap-staging`，前者接收cc�
 {% endhighlight %}
 
 其中`run_plugin`关键内容如下
+
 {% highlight ruby linenos%}
 
 plugin_name, config_path = ARGV
@@ -394,9 +404,183 @@ plugin.stage_application
 
 {% endhighlight %}
 
-这里我们举sinatra/ruby18为例子说明制作droplet的过程。
+这里我们举sinatra/ruby18为例子说明制作droplet的过程，如果需要扩展支持更多的runtime/framework，扩展工作在此处进行。则对应的对应plugin的执行方法为`SinatraPlugin#stage_application`.如果是其他framework，根据`StagingPlugin#load_plugin_for`会加载`vcap-staging/lib/vcap/staging/plugin/<framework_name>/plugin.rb`中的`<Framework>Plugin`，其中加载ruby文件的framework名一般遵从下划线命名法(java_web.rb)，而对象遵从帕斯卡命名法(JavaWebPlugin)
+
+{% highlight ruby linenos%}
+
+  def stage_application
+    Dir.chdir(destination_directory) do
+      create_app_directories
+      copy_source_files
+      compile_gems
+      install_autoconfig_gem if autoconfig_enabled?
+      create_startup_script
+      create_stop_script
+    end
+  end
+
+{% endhighlight %}
+
+**1. `create_app_directories` 创建一些标准的文件夹**
+
+        root_dir=   .
+    unstaged_dir=   ├── unstaged/
+      staged_dir=   └── staged/
+         *app_dir=          ├── app/
+         *log_dir=          ├── log/
+         *tmp_dir=          └── tmp/
+    (*为新创建的文件夹)
+
+**2. `copy_source_files` 将app代码从`unstaged_dir`复制到`app_dir`**
+
+**3. `compile_gems` 根据runtime的ruby版本，安装gems.**
+  
+{% highlight ruby linenos%}
+  def compile_gems
+    return unless uses_bundler?
+    return if packaged_with_bundler_in_deployment_mode?
+
+    gem_task.install
+    gem_task.install_bundler
+    gem_task.remove_gems_cached_in_app
+
+    write_bundle_config
+  end
+{% endhighlight %}
+ 
+  `GemfileSupport#compile_gems`的注释说明了工作过程，这里采用ruby bundle工具进行依赖管理。
+
+   + 如果没有`Gemfile.lock`文件，说明包管理使用其他的方法，则直接return，不进行处理
+   + 如果有`:unstaged_dir/vendor/bundle/{ruby_version}`说明用户使用`bundle install --local --deployment`的方式已经将需要的gem放在正确的位置下，因此也不需要进行额外的stage工作
+   + 接下来通过`GemfileTask`安装gem
+     - `install`会安装`Gemfile.lock`文件里的gem，如果local cache中没有，则从git-repo/rubygems下载并保存在cache中, 然后使用`gem install`命令安装.
+        (主要代码分布于`gemfile_parser` `gemspec_builder` `git_cache` `gem_cache` )
+        1. 这里的过程是利用`gemfile_parser.rb`将`Gemfile.lock`中的gem和版本信息(包括来自github的gem)进行分析，将所需要的所有gem写入到`specs`文件中，然后根据`specs`文件安装gem。
+        `specs`文件主要标识了gem的 name, version 和 source，如果source是git方式[即`spec.source.class.name = Bundler::Source::Git`]，则会包含额外的 git_scope, url, revision, submodules信息
+        2. 安装时会区分source。如果是普通的gem，则首先尝试从`@app_dir/vendor/cache/`目录中查找用户上传文件中包含的gem，如果没有则从`<package_cache>/blessed_gems/`目录中查找该gem(<package_cache>为stager server配置文件platform.yml中cache的值)，最后用户既没提供，本地缓存的也没有，则会从rubygems中下载该gem并保存至`<package_cache>/blessed_gems/`目录下缓存。如果是git gems，则先检查缓存gem，如果没有，则从git-repo下载，根据其中的*.gemspec文件build出gem，然后根据该gem安装
+        3. 安装gem的命令是`gem install #{staged_gemfile} --local --no-rdoc --no-ri -E -w -f --ignore-dependencies --install-dir #{gem_install_dir}`，将gem安装(解压)到一个临时文件夹中，然后复制到`<package_cache>`下的一个散列后的文件夹中缓存，最后将解压后的gem包复制到`@app_dir/rubygems/ruby/@library_version/`中去，git的gem则存到该目录的`bundler/gems/:git_scope`中。
+
+        综上，安装gem的过程其实和运行`bundle install --local --deployment`的结果相同，但是stager安装的过程中会大量缓存gem和gem_package，因此在多次安装的场景中会大大降低网络请求的数据量
+
+     - `install_bundler`即安装bundler-1.2.1
+     - `remove_gems_cached_in_app`删除`@app_dir/rubygems/ruby/@library_version/cache`目录用户可能保存的gem
+   + `write_bundle_config`主要作用是写入`BUNDLE_PATH: rubygems ;BUNDLE_DISABLE_SHARED_GEMS: "1"; BUNDLE_WITHOUT`以便在DEA中运行bundle
+
+**4. `install_autoconfig_gem` 如果存在`staged_dir/app/config/cloudfoundry.yml`且其中`autoconfig`的值安装gem `cf-runtime 0.0.2`和`cf-autoconfig 0.0.4`, 如果不为false都会安装, 这个gem可以帮助用户在代码中调用cf的API连接service(mysql, redis)** gem doc的介绍如下
+
+> A library for interacting with Cloud Foundry services. Provides methods for obtaining pre-configured connection objects and connection properties.
+
+**5. `create_startup_script`和`create_stop_script`创建 app的启动/停止脚本，无非就是设置一些环境变量和启动/停止命令代码分布于`staging_plugin`和`plugin/xx/plugin`中，由于不同runtime/framework的脚本差异较大，不作详细介绍**
+
+至此，用户上传的app的源代码经过了stager-server的打包，将完整的依赖包都安装之后压缩上传给cc，已经具有start/stop脚本，可以直接执行了
+
 
 ### Step5: Start/stop instance
+
+cc收到stager打包后的app之后，开始准备根据用户提供的`resources`更新/启动在DEA中app，调整DEA中运行的app的数量，主要操作也就是start/stop instance.
+
+启动dea中的app分成两个步骤，首先cc寻找可以接收此app的dea，其次dea根据消息下载staged app (即 droplet)并启动droplet。
+
+**1. cc寻找dea** 
+
+  代码如下
+
+  {% highlight ruby linenos%}
+  def find_dea_for(message)
+    if AppConfig[:new_initial_placement]
+     DEAPool.find_dea(message)
+    else
+      find_dea_message = {
+        :droplet => message[:droplet],
+        :limits => message[:limits],
+        :name => message[:name],
+        :runtime_info => message[:runtime_info],
+        :runtime => message[:runtime],
+        :prod => message[:prod],
+        :sha => message[:sha1]
+      }
+      json_msg = Yajl::Encoder.encode(find_dea_message)
+      result = NATS.timed_request('dea.discover', json_msg, :timeout => 2).first
+      return nil if result.nil?
+      CloudController.logger.debug "Received #{result.inspect} in response to dea.discover request"
+      Yajl::Parser.parse(result, :symbolize_keys => true)[:id]
+    end
+  end
+
+  #message is init here
+  def new_message
+    data = {:droplet => app.id, :name => app.name, :uris => app.mapped_urls}
+    data[:runtime] = app.runtime
+    data[:runtime_info] = Runtime.find(app.runtime).options
+    data[:framework] = app.framework
+    data[:prod] = app.prod
+    data[:sha1] = app.staged_package_hash
+    data[:executableFile] = app.resolve_staged_package_path
+    data[:executableUri] = "/staged_droplets/#{app.id}/#{app.staged_package_hash}"
+    data[:version] = app.generate_version
+    data[:services] = app.service_bindings.map {|sb| sb.for_dea }
+    data[:limits] = app.limits
+    data[:env] = app.environment_variables
+    data[:users] = [app.owner.email] 
+    data[:cc_partition] = AppConfig[:cc_partition]
+    data
+  end
+  {% endhighlight %}
+
+  如果cc的配置文件中`new_initial_placement`为true，则会从DEAPool中取得一个满足resource要求的DEA，否则在NAT中发送广播消息等待DEA回应。 前者的方式是根据DEA定期发送的`dea.advertise`消息获得当前全局DEA的资源状态，并从中取得一个合适的DEA。后者则是立刻发送一个`dea.discover`消息等待满足的条件的DEA回复自己包含`{ :id => uuid, :ip => @local_ip, :port => @file_viewer_port, :version => VERSION }`的消息。有了这些消息，接下来cc就可以发送启动命令给DEA要求DEA启动droplet了
+
+  DEA响应的方法为`DEA::Agent#process_dea_discover(message, reply)`, 代码比较简单
+
+**2. dea启动droplet**
+
+  {% highlight ruby linenos%}
+  def start_instances(start_message, index, max_to_start)
+    EM.next_tick do
+      f = Fiber.new do
+        message = start_message.dup
+        message[:executableUri] = download_app_uri(message[:executableUri])
+        message[:debug] = @app.metadata[:debug]
+        message[:console] = @app.metadata[:console]
+        (index...max_to_start).each do |i|
+          message[:index] = i
+          dea_id = find_dea_for(message)
+          json = Yajl::Encoder.encode(message)
+          if dea_id
+            CloudController.logger.debug("Sending start message #{json} to DEA #{dea_id}")
+            NATS.publish("dea.#{dea_id}.start", json)
+          else
+            CloudController.logger.warn("No resources available to start instance #{json}")
+          end
+        end
+      end
+      f.resume
+    end
+  end
+  {% endhighlight %}
+
+  在这里cc通过在NATS上发送`topic=dea.#{dea_id}.start`的消息，告知dea_id对应的DEA下载droplet的URL, resource limit等等一切所需要的消息，等待DEA启动droplet.
+
+  DEA这边处理该请求的方法是`DEA::Agent#process_dea_start(message)`([github](https://github.com/cloudfoundry/dea/blob/master/lib/dea/agent.rb#L554))，代码比较多就不贴出来了。值的注意的是占巨大行数的`start_operation`是一个lambda表达式，所以执行的过程是进行了一通json解析和验证之后，执行`stage_app_dir`来从cc下载和解压droplet，然后才会调用`start_operation.call`来执行启动流程。在`start_operation`中有两个proc - `exec_operation`和`exit_operation`分别对应启动droplet的方法和停止后的回调方法.启动是通过EventMachine.system启动的 - `EM.system("#{@dea_ruby} -- #{prepare_script} true #{sh_command}", exec_operation, exit_operation)`
+  其中`prepare_script`即为dea/bin/close_fds, 关闭`/proc/self/fd/`下除了stdin stdout stderr外的其他文件句柄。
+
+  从`exec_operation`的代码可以看出，v1版本的dea实现的隔离性非常有限，仅仅是通过`ulimit`进行一些基本的限制，隔离水平远远达不到商用的水平(所以v1版本的cc和dea一直都是免费在用)，尤其是缺少cpu和网络的隔离，在v2版本推出带来基于cgroups的warden才能解决此问题。
+
+**3. dea停止droplet**
+
+  停止dea中的app非常简单，cc在nats中发送消息 topic = "dea.stop" msg = { :droplet => app.id, :version => app.generate\_version, :indices => indices } 即可，如果停止有限个instance, indices即为停止的index的集合，否则只包含`:droplet`将停止全部该app的droplet。停止过程就是执行droplet中的停止脚本并删除droplet所在文件夹；同时发送topic = 'droplet.exited' 和 'router.unregister'向health\_manager和router通知droplet已经停止。代码非常简单, 有兴趣的可以跟踪`DEA::Agent#stop_droplet(instance)`
+
+---
+
+## 结语
+
+本文从代码级别对cf v1版本中部署app的过程进行了简要介绍，重点解释了关键函数和流程。然而更多的内容需要深入代码理解才行，希望本文能给希望一窥cf如何部署执行app的
+朋友带来帮助。
+
+本文重点介绍过程，并没对cloud_controller, stager和dea的代码结构和框架进行详细介绍，仅仅对关键方法进行说明。然而由于这3个项目都是ruby项目，代码阅读起来比较清爽，所以有兴趣了解全貌的朋友可以花些时间读读代码。
+
+由于本人写作能力有限，本文又臭又长，非常感激有人能读到此处。最后抱怨一下vmware的工程师喜欢把一个文件里写太多功能而非通过module分开然后include的方法，dea中agent.rb有1868行...Xp
+
+---
 
 ## Troube Shooting
 
@@ -407,77 +591,3 @@ plugin.stage_application
 `if app.respond_to?("buildpack") and buildpack = app.buildpack`
 
 本人已经将此bug fix提交给repo的owner，pull request见此<https://github.com/cloudfoundry/manifests-vmc-plugin/pull/4>。
-
-
-
-
-
-
-
-		GET http://api.cf.com/apps/test check not named
-		GET http://api.cf.com/info get frameworks
-		GET http://api.cf.com/info/runtimes get runtimes
-		GET http://api.cf.com/info  get limits
-		POST http://api.cf.com/apps 
-		request {"name":"test","instances":1,"staging":{"model":"sinatra","stack":"ruby19"},"resources":{"memory":64}
-		response {
-		  "result": "success",
-		  "redirect": "http://api.cf.com/apps/test"
-		}
-		GET http://api.cf.com/apps/test
-		request {"name":"test","instances":1,"staging":{"model":"sinatra","stack":"ruby19"},"resources":{"memory":64}}
-		response
-		{
-		  "name": "test",
-		  "staging": {
-		    "model": "sinatra",
-		    "stack": "ruby19"
-		  },
-		  "uris": [
-
-		  ],
-		  "instances": 1,
-		  "runningInstances": 0,
-		  "resources": {
-		    "memory": 64,
-		    "disk": 2048,
-		    "fds": 256
-		  },
-		  "state": "STOPPED",
-		  "services": [
-
-		  ],
-		  "version": "47bfb5b4433f70629c4e02559b55ec38-0",
-		  "env": [
-
-		  ],
-		  "meta": {
-		    "debug": null,
-		    "console": null,
-		    "version": 1,
-		    "created": 1372217637
-		  }
-		}
-		PUT http://api.cf.com/apps/test
-		 {"name":"test","instances":1,"state":"STOPPED","staging":{"model":"sinatra","stack":"ruby19"},"resources":{"memory":64,"disk":2048,"fds":256},"env":[],"uris":["test.cf.com"],"services":[],"console":null,"debug":null}
-
-		POST http://api.cf.com/apps/test/application upload
-		{:_method=>"put", :resources=>"[]", :application=>#<UploadIO:0x0000000180d788 @content_type="application/zip", @original_filename="test.zip", @local_path="/tmp/test.zip", @io=#<File:/tmp/test.zip>, @opts={}>}
-
-		 PUT http://api.cf.com/apps/test
-		 {"name":"test","instances":1,"state":"STARTED","staging":{"model":"sinatra","stack":"ruby18"},"resources":{"memory":64,"disk":2048,"fds":256},"env":[],"uris":["test.cf.com"],"services":[],"console":null,"debug":null}
-		 GET http://api.cf.com/apps/test/instances
-		 RESPONSE_BODY:
-		{
-		  "instances": [
-		    {
-		      "index": 0,
-		      "state": "RUNNING",
-		      "since": 1372217907,
-		      "debug_ip": null,
-		      "debug_port": null,
-		      "console_ip": null,
-		      "console_port": null
-		    }
-		  ]
-		}
