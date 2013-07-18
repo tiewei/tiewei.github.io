@@ -5,7 +5,6 @@ tagline : "Cloud Foundry V1版本中部署应用的工作流程"
 description: "Workflow of Push App in Cloud Foundry v1"
 category: cloudfoundry
 tags: [Cloudfoundry, cloud_controller, stager, dea]
-published: false
 ---
 {% include JB/setup %}
 
@@ -50,6 +49,8 @@ v1版客户端，这里主要的操作就是利用`vmc push`将用户程序代�
 ## PUSH APP时组件操作概述
 
 ![Cloud Foundry v1 Push App](/images/CF-v1-push-app.png "cloud-foundry-v1-push-app")
+
+_图中router和nats之间的交互未标出_
 
 1. **vmc -> cloud_controller** : vmc根据用户代码新建app -> 更新url/memery等信息(state=STOPPED) -> 上传用户app代码，此处通过REST API交互
 
