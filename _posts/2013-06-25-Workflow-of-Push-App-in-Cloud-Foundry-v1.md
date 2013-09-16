@@ -85,90 +85,79 @@ resources的元素是一个HASH `{ :size => size, :sha1 => Digest::SHA1.file(fil
 
 	POST http://api.cf.com/apps/:app/application
 	{:_method=>"put", :resources=>"[]", :application=>#<UploadIO:0x0000000180d788 @content_type="application/zip", @original_filename="test.zip", @local_path="/tmp/test.zip", @io=#<File:/tmp/test.zip>, @opts={}>}
-	其中test为app的name
+
+其中test为app的name
 
 根据cc的`routes.rb`([github](https://github.com/cloudfoundry/cloud_controller/blob/master/cloud_controller/config/routes.rb#L20))，处理代码如下：
 
 `AppsController#upload`-[github](https://github.com/cloudfoundry/cloud_controller/blob/master/cloud_controller/app/controllers/apps_controller.rb#L79)
 
-{% highlight ruby linenos %}
 
-def upload
-   ...
-      file = get_uploaded_file
-      resources = json_param(:resources)
-      package = AppPackage.new(@app, file, resources)
-      @app.latest_bits_from(package)
-   ...
-end
+    def upload
+       ...
+          file = get_uploaded_file
+          resources = json_param(:resources)
+          package = AppPackage.new(@app, file, resources)
+          @app.latest_bits_from(package)
+       ...
+    end
 
-{% endhighlight %}
 
 这里将上传对应的app与上传的文件关联新建一个AppPackage对象。
 
 `latest_bits_from(app_package)`-[github](https://github.com/cloudfoundry/cloud_controller/blob/master/cloud_controller/models/app.rb#L326)
 	
-{% highlight ruby linenos %}
 
-def latest_bits_from(app_package)
-  sha1 = app_package.to_zip 
-  unless self.package_hash == sha1
-    ...
-    unless self.package_hash.nil?
-      FileUtils.rm_f(self.legacy_unstaged_package_path)
+    def latest_bits_from(app_package)
+      sha1 = app_package.to_zip 
+      unless self.package_hash == sha1
+        ...
+        unless self.package_hash.nil?
+          FileUtils.rm_f(self.legacy_unstaged_package_path)
+        end
+        self.package_state = 'PENDING'
+        self.package_hash = sha1
+        save!
+      end
     end
-    self.package_state = 'PENDING'
-    self.package_hash = sha1
-    save!
-  end
-end
 
-{% endhighlight %}
 
 将对上传的文件利用`to_zip`方法进行处理，得出sha的值，并根据该值与数据库中app关联的package进行比较，如果不同，则更新sha值并将package_state设为PENDING状态
 
 `AppPackage#to_zip`-[github](https://github.com/cloudfoundry/cloud_controller/blob/master/cloud_controller/models/app_package.rb#L7)
 
-{% highlight ruby linenos %}
-
-def to_zip
-  tmpdir = Dir.mktmpdir
-  dir = path = nil
-  check_package_size
-  timed_section(CloudController.logger, 'app_to_zip') do
-    dir = unpack_upload
-    synchronize_pool_with(dir)
-    path = AppPackage.repack_app_in(dir, tmpdir, :zip)
-    sha1 = save_package(path) if path
-  end
-ensure
-  FileUtils.rm_rf(tmpdir)
-  FileUtils.rm_rf(dir) if dir
-  FileUtils.rm_rf(File.dirname(path)) if path
-end
-
-{% endhighlight %}
+    def to_zip
+      tmpdir = Dir.mktmpdir
+      dir = path = nil
+      check_package_size
+      timed_section(CloudController.logger, 'app_to_zip') do
+        dir = unpack_upload
+        synchronize_pool_with(dir)
+        path = AppPackage.repack_app_in(dir, tmpdir, :zip)
+        sha1 = save_package(path) if path
+      end
+    ensure
+      FileUtils.rm_rf(tmpdir)
+      FileUtils.rm_rf(dir) if dir
+      FileUtils.rm_rf(File.dirname(path)) if path
+    end
 
 此处在`check_package_size`检查package的大小是否超过限制(config中的`max_droplet_size`，默认512M)，`unpack_upload`将zip包解压到tmp文件夹，`synchronize_pool_with`将其同步到resource pool(这是resource pool是基于文件系统的实现即`FilesystemPool`，跟根目录是`AppConfig[:directories][:resources]`，可扩展至其他存储，只需继承`ResourcePool`)
 
-{% highlight ruby linenos %}
-
-def synchronize_pool_with(working_dir)
-  timed_section(CloudController.logger, 'process_app_resources') do
-    AppPackage.blocking_defer do
-      pool = CloudController.resource_pool
-      pool.add_directory(working_dir)
-      @resource_descriptors.each do |descriptor|
-        create_dir_skeleton(working_dir, descriptor[:fn])
-        path = resolve_path(working_dir, descriptor[:fn])
-        pool.copy(descriptor, path)
+    def synchronize_pool_with(working_dir)
+      timed_section(CloudController.logger, 'process_app_resources') do
+        AppPackage.blocking_defer do
+          pool = CloudController.resource_pool
+          pool.add_directory(working_dir)
+          @resource_descriptors.each do |descriptor|
+            create_dir_skeleton(working_dir, descriptor[:fn])
+            path = resolve_path(working_dir, descriptor[:fn])
+            pool.copy(descriptor, path)
+          end
+        end
       end
+      ...
     end
-  end
-  ...
-end
-
-{% endhighlight %}
 
 
 由代码可见其将解压后的zip包文件夹`working_dir`同resource pool进行了同步。有两个操作，`add_directory`将`workdir`中的文件(非文件夹)路径计算出sha1值(`Digest::SHA1.file(path).hexdigest`与vmc计算方法一致)，然后根据sha1值进行计算(`FilesystemPool#path_from_sha1`)出一个形如`/resources_pool_root/MOD#1/MOD#2/SHA1`的文件路径`resource_path`，然后复制该文件到`resource_path`。另外一个操作就是恢复没有上传的已经存在`resources_pool`中的文件：`create_dir_skeleton`创建其所在文件夹`resolve_path`获得该文件应该在package中的文件路径，然后复制到package中，将解压后的文件夹package恢复成拥有全部应有文件的状态.之后重新打包成zip文件，将此zip文件计算出sha1值，保存为`package_dir/app_#{@app.id}`文件(`package_dir`为`AppConfig[:directories][:droplets]`)，并在数据库中更新`package_hash`为最新的sha1值。最后删除所有的临时文件(夹)。
@@ -180,89 +169,85 @@ end
 
 新建/更新app的请求示例如下
 
-	POST http://api.cf.com/apps 
-	request {"name":"{:app}","instances":1,"staging":{"model":"sinatra","stack":"ruby19"},"resources":{"memory":64}
+  	POST http://api.cf.com/apps 
+  	request {"name":"{:app}","instances":1,"staging":{"model":"sinatra","stack":"ruby19"},"resources":{"memory":64}
 
-	PUT http://api.cf.com/apps/{:app}
-	{"name":"test","instances":1,"state":"STARTED","staging":{"model":"sinatra","stack":"ruby18"},"resources":{"memory":64,"disk":2048,"fds":256},"env":[],"uris":["test.cf.com"],"services":[],"console":null,"debug":null}
+  	PUT http://api.cf.com/apps/{:app}
+  	{"name":"test","instances":1,"state":"STARTED","staging":{"model":"sinatra","stack":"ruby18"},"resources":{"memory":64,"disk":2048,"fds":256},"env":[],"uris":["test.cf.com"],"services":[],"console":null,"debug":null}
 
 根据cc的`routes.rb`， 请求将由`AppsController#create`和`AppsController#update`处理，其核心部分是`AppsController#update_app_from_params(app)`，代码如下
 
-{% highlight ruby linenos%}
+    # Checks to make sure the update can proceed, then updates the given
+    # App from the request params and makes the necessary AppManager calls.
+    def update_app_from_params(app)
+      CloudController.logger.debug "app: #{app.id || "nil"} update_from_parms"
+      error_on_lock_mismatch(app)
+      app.lock_version += 1
 
-# Checks to make sure the update can proceed, then updates the given
-# App from the request params and makes the necessary AppManager calls.
-def update_app_from_params(app)
-  CloudController.logger.debug "app: #{app.id || "nil"} update_from_parms"
-  error_on_lock_mismatch(app)
-  app.lock_version += 1
+      previous_state = app.state
+      update_app_state(app)
+      # State needs to be changed from above before capacity check.
+      check_has_capacity_for?(app, previous_state)
+      check_app_uris(app)
+      update_app_mem(app)
+      update_app_env(app)
+      update_app_staging(app)
+      delta_instances = update_app_instances(app)
 
-  previous_state = app.state
-  update_app_state(app)
-  # State needs to be changed from above before capacity check.
-  check_has_capacity_for?(app, previous_state)
-  check_app_uris(app)
-  update_app_mem(app)
-  update_app_env(app)
-  update_app_staging(app)
-  delta_instances = update_app_instances(app)
+      changed = app.changed
+      CloudController.logger.debug "app: #{app.id} Updating #{changed.inspect}"
 
-  changed = app.changed
-  CloudController.logger.debug "app: #{app.id} Updating #{changed.inspect}"
+      # reject attempts to start in debug mode if debugging is disabled
+      if body_params[:debug] and app.state == 'STARTED' and !AppConfig[:allow_debug]
+        raise CloudError.new(CloudError::APP_DEBUG_DISALLOWED)
+      end
 
-  # reject attempts to start in debug mode if debugging is disabled
-  if body_params[:debug] and app.state == 'STARTED' and !AppConfig[:allow_debug]
-    raise CloudError.new(CloudError::APP_DEBUG_DISALLOWED)
-  end
+      app.metadata[:debug] = body_params[:debug] if body_params
+      app.metadata[:console] = body_params[:console] if body_params
 
-  app.metadata[:debug] = body_params[:debug] if body_params
-  app.metadata[:console] = body_params[:console] if body_params
+      # 'app.save' can actually raise an exception, if whatever is
+      # invalid happens all the way down at the DB layer.
+      begin
+        app.save!
+      rescue Exception => e
+        CloudController.logger.error "app: #{app.id} Failed to save new app errors: #{app.errors}.  Exception: #{e}"
+        raise CloudError.new(CloudError::APP_INVALID)
+      end
 
-  # 'app.save' can actually raise an exception, if whatever is
-  # invalid happens all the way down at the DB layer.
-  begin
-    app.save!
-  rescue Exception => e
-    CloudController.logger.error "app: #{app.id} Failed to save new app errors: #{app.errors}.  Exception: #{e}"
-    raise CloudError.new(CloudError::APP_INVALID)
-  end
+      # This needs to be called after the app is saved, but before staging.
+      update_app_services(app)
+      app.save if app.changed?
 
-  # This needs to be called after the app is saved, but before staging.
-  update_app_services(app)
-  app.save if app.changed?
+      # Process any changes that require action on out part here.
+      manager = AppManager.new(app)
 
-  # Process any changes that require action on out part here.
-  manager = AppManager.new(app)
+      stage_app(app) if app.needs_staging?
 
-  stage_app(app) if app.needs_staging?
+      if changed.include?('state')
+        if app.stopped?
+          manager.stopped
+        elsif app.started?
+          manager.started
+        end
+        manager.updated
+      elsif app.started?
+        # Instances (up or down) and uris we will handle in place, since it does not
+        # involve staging changes.
+        if changed.include?('instances')
+          manager.change_running_instances(delta_instances)
+          manager.updated
 
-  if changed.include?('state')
-    if app.stopped?
-      manager.stopped
-    elsif app.started?
-      manager.started
+          user_email = user ? user.email : 'N/A'
+          CloudController.events.user_event(user_email, app.name, "Changing instances to #{app.instances}", :SUCCEEDED)
+
+        end
+      end
+
+      # Now add in URLs
+      manager.update_uris if update_app_uris(app)
+
+      yield(app) if block_given?
     end
-    manager.updated
-  elsif app.started?
-    # Instances (up or down) and uris we will handle in place, since it does not
-    # involve staging changes.
-    if changed.include?('instances')
-      manager.change_running_instances(delta_instances)
-      manager.updated
-
-      user_email = user ? user.email : 'N/A'
-      CloudController.events.user_event(user_email, app.name, "Changing instances to #{app.instances}", :SUCCEEDED)
-
-    end
-  end
-
-  # Now add in URLs
-  manager.update_uris if update_app_uris(app)
-
-  yield(app) if block_given?
-end
-
-{% endhighlight %}
 
 前40行的逻辑非常简单，根据request中的参数，更新db中app对象的url,mem,env,runtime,framework,services信息，并更新到数据库中，接下来分为几个详细的步骤
 
@@ -279,32 +264,29 @@ end
 
 这里代码比较简单，就不详细介绍，但是我们需要介绍一下cc发送到NAT的消息，topic=`AppConfig[:staging][:queue]`。内容说明如下：
 
-{% highlight ruby linenos%}
 
-{
-    "app_id"       => app.id,
-    "properties"   => app.staging_task_properties,
-    "download_uri" => dl_uri, # /staging/app/#{app.id}
-    "upload_uri"   => ul_hdl.upload_uri, # /staging/droplet/#{app.id}/#{VCAP.secure_uuid}
-}
+    {
+      "app_id"       => app.id,
+      "properties"   => app.staging_task_properties,
+      "download_uri" => dl_uri, # /staging/app/#{app.id}
+      "upload_uri"   => ul_hdl.upload_uri, # /staging/droplet/#{app.id}/#{VCAP.secure_uuid}
+    }
 
-{% endhighlight %}
 
 其中 `app.staging_task_properties` 如下
 
-{% highlight ruby linenos%}
 
-{    
-	"services"       => services,
-  "framework"      => framework,
-  "framework_info" => Framework.find(framework).options,
-  "runtime"        => runtime,
-  "runtime_info"   => Runtime.find(runtime).options,
-  "resources"      => resource_requirements,
-  "environment"    => environment,
-  "meta" => metadata 
-}
-{% endhighlight %}
+    {    
+    	"services"       => services,
+      "framework"      => framework,
+      "framework_info" => Framework.find(framework).options,
+      "runtime"        => runtime,
+      "runtime_info"   => Runtime.find(runtime).options,
+      "resources"      => resource_requirements,
+      "environment"    => environment,
+      "meta" => metadata 
+    }
+
 
 这里暂时不讨论包含services的情况，所以services={}
 framework和runtime对应request中的`model`和`stack`；
@@ -322,40 +304,38 @@ stager节点主要包含两个项目`stager`和`vcap-staging`，前者接收cc�
 
 处理`AppConfig[:staging][:queue]`topic 的方法为`VCAP::Stager::Server#execute_request(encoded_request, reply_to)`，会根据message建立一个`VCAP::Stager::Task`实例，并执行其`preform`方法。
 
-{% highlight ruby linenos%}
 
-  def perform
-    @logger.info("Starting task for request: #{@request}")
+    def perform
+      @logger.info("Starting task for request: #{@request}")
 
-    @task_logger.info("Setting up temporary directories")
-    workspace = VCAP::Stager::Workspace.create
+      @task_logger.info("Setting up temporary directories")
+      workspace = VCAP::Stager::Workspace.create
 
-    @task_logger.info("Downloading application")
-    app_path = File.join(workspace.root_dir, "app.zip")
-    download_app(app_path)
+      @task_logger.info("Downloading application")
+      app_path = File.join(workspace.root_dir, "app.zip")
+      download_app(app_path)
 
-    @task_logger.info("Unpacking application")
-    unpack_app(app_path, workspace.unstaged_dir)
+      @task_logger.info("Unpacking application")
+      unpack_app(app_path, workspace.unstaged_dir)
 
-    @task_logger.info("Staging application")
-    stage_app(workspace.unstaged_dir, workspace.staged_dir, @task_logger)
+      @task_logger.info("Staging application")
+      stage_app(workspace.unstaged_dir, workspace.staged_dir, @task_logger)
 
-    @task_logger.info("Creating droplet")
-    droplet_path = File.join(workspace.root_dir, "droplet.tgz")
-    create_droplet(workspace.staged_dir, droplet_path)
+      @task_logger.info("Creating droplet")
+      droplet_path = File.join(workspace.root_dir, "droplet.tgz")
+      create_droplet(workspace.staged_dir, droplet_path)
 
-    @task_logger.info("Uploading droplet")
-    upload_droplet(droplet_path)
+      @task_logger.info("Uploading droplet")
+      upload_droplet(droplet_path)
 
-    @task_logger.info("Done!")
+      @task_logger.info("Done!")
 
-    nil
+      nil
 
-  ensure
-    workspace.destroy if workspace
-  end
+    ensure
+      workspace.destroy if workspace
+    end
 
-{% endhighlight %}
 
  经过了6步处理
 
@@ -381,46 +361,40 @@ stager节点主要包含两个项目`stager`和`vcap-staging`，前者接收cc�
  
  即执行 `ruby path_to_stager/bin/run_plugin framework_name file_of_opinion`.其中`file_of_opinion`包含的信息如下
 
-{% highlight ruby linenos%}
 
- {
-    "source_dir"   => unstaged_dir,
-    "dest_dir"     => staged_dir,
-    "environment"  => @request["properties"]
-    "secure_user"  => {"uid" => secure_user[:uid],
-				      "gid" => secure_user[:gid], }
- }
+   {
+      "source_dir"   => unstaged_dir,
+      "dest_dir"     => staged_dir,
+      "environment"  => @request["properties"]
+      "secure_user"  => {"uid" => secure_user[:uid],
+  				      "gid" => secure_user[:gid], }
+   }
 
-{% endhighlight %}
 
 其中`run_plugin`关键内容如下
 
-{% highlight ruby linenos%}
 
-plugin_name, config_path = ARGV
+    plugin_name, config_path = ARGV
 
-klass  = StagingPlugin.load_plugin_for(plugin_name)
-plugin = klass.from_file(config_path)
-plugin.stage_application
+    klass  = StagingPlugin.load_plugin_for(plugin_name)
+    plugin = klass.from_file(config_path)
+    plugin.stage_application
 
-{% endhighlight %}
 
 这里我们举sinatra/ruby18为例子说明制作droplet的过程，如果需要扩展支持更多的runtime/framework，扩展工作在此处进行。则对应的对应plugin的执行方法为`SinatraPlugin#stage_application`.如果是其他framework，根据`StagingPlugin#load_plugin_for`会加载`vcap-staging/lib/vcap/staging/plugin/<framework_name>/plugin.rb`中的`<Framework>Plugin`，其中加载ruby文件的framework名一般遵从下划线命名法(java_web.rb)，而对象遵从帕斯卡命名法(JavaWebPlugin)
 
-{% highlight ruby linenos%}
 
-  def stage_application
-    Dir.chdir(destination_directory) do
-      create_app_directories
-      copy_source_files
-      compile_gems
-      install_autoconfig_gem if autoconfig_enabled?
-      create_startup_script
-      create_stop_script
+    def stage_application
+      Dir.chdir(destination_directory) do
+        create_app_directories
+        copy_source_files
+        compile_gems
+        install_autoconfig_gem if autoconfig_enabled?
+        create_startup_script
+        create_stop_script
+      end
     end
-  end
 
-{% endhighlight %}
 
 **1. `create_app_directories` 创建一些标准的文件夹**
 
@@ -436,18 +410,16 @@ plugin.stage_application
 
 **3. `compile_gems` 根据runtime的ruby版本，安装gems.**
   
-{% highlight ruby linenos%}
-  def compile_gems
-    return unless uses_bundler?
-    return if packaged_with_bundler_in_deployment_mode?
+      def compile_gems
+        return unless uses_bundler?
+        return if packaged_with_bundler_in_deployment_mode?
 
-    gem_task.install
-    gem_task.install_bundler
-    gem_task.remove_gems_cached_in_app
+        gem_task.install
+        gem_task.install_bundler
+        gem_task.remove_gems_cached_in_app
 
-    write_bundle_config
-  end
-{% endhighlight %}
+        write_bundle_config
+      end
  
   `GemfileSupport#compile_gems`的注释说明了工作过程，这里采用ruby bundle工具进行依赖管理。
 
@@ -486,47 +458,45 @@ cc收到stager打包后的app之后，开始准备根据用户提供的`resource
 
   代码如下
 
-  {% highlight ruby linenos%}
-  def find_dea_for(message)
-    if AppConfig[:new_initial_placement]
-     DEAPool.find_dea(message)
-    else
-      find_dea_message = {
-        :droplet => message[:droplet],
-        :limits => message[:limits],
-        :name => message[:name],
-        :runtime_info => message[:runtime_info],
-        :runtime => message[:runtime],
-        :prod => message[:prod],
-        :sha => message[:sha1]
-      }
-      json_msg = Yajl::Encoder.encode(find_dea_message)
-      result = NATS.timed_request('dea.discover', json_msg, :timeout => 2).first
-      return nil if result.nil?
-      CloudController.logger.debug "Received #{result.inspect} in response to dea.discover request"
-      Yajl::Parser.parse(result, :symbolize_keys => true)[:id]
+    def find_dea_for(message)
+      if AppConfig[:new_initial_placement]
+       DEAPool.find_dea(message)
+      else
+        find_dea_message = {
+          :droplet => message[:droplet],
+          :limits => message[:limits],
+          :name => message[:name],
+          :runtime_info => message[:runtime_info],
+          :runtime => message[:runtime],
+          :prod => message[:prod],
+          :sha => message[:sha1]
+        }
+        json_msg = Yajl::Encoder.encode(find_dea_message)
+        result = NATS.timed_request('dea.discover', json_msg, :timeout => 2).first
+        return nil if result.nil?
+        CloudController.logger.debug "Received #{result.inspect} in response to dea.discover request"
+        Yajl::Parser.parse(result, :symbolize_keys => true)[:id]
+      end
     end
-  end
 
-  #message is init here
-  def new_message
-    data = {:droplet => app.id, :name => app.name, :uris => app.mapped_urls}
-    data[:runtime] = app.runtime
-    data[:runtime_info] = Runtime.find(app.runtime).options
-    data[:framework] = app.framework
-    data[:prod] = app.prod
-    data[:sha1] = app.staged_package_hash
-    data[:executableFile] = app.resolve_staged_package_path
-    data[:executableUri] = "/staged_droplets/#{app.id}/#{app.staged_package_hash}"
-    data[:version] = app.generate_version
-    data[:services] = app.service_bindings.map {|sb| sb.for_dea }
-    data[:limits] = app.limits
-    data[:env] = app.environment_variables
-    data[:users] = [app.owner.email] 
-    data[:cc_partition] = AppConfig[:cc_partition]
-    data
-  end
-  {% endhighlight %}
+    #message is init here
+    def new_message
+      data = {:droplet => app.id, :name => app.name, :uris => app.mapped_urls}
+      data[:runtime] = app.runtime
+      data[:runtime_info] = Runtime.find(app.runtime).options
+      data[:framework] = app.framework
+      data[:prod] = app.prod
+      data[:sha1] = app.staged_package_hash
+      data[:executableFile] = app.resolve_staged_package_path
+      data[:executableUri] = "/staged_droplets/#{app.id}/#{app.staged_package_hash}"
+      data[:version] = app.generate_version
+      data[:services] = app.service_bindings.map {|sb| sb.for_dea }
+      data[:limits] = app.limits
+      data[:env] = app.environment_variables
+      data[:users] = [app.owner.email] 
+      data[:cc_partition] = AppConfig[:cc_partition]
+      data
+    end
 
   如果cc的配置文件中`new_initial_placement`为true，则会从DEAPool中取得一个满足resource要求的DEA，否则在NAT中发送广播消息等待DEA回应。 前者的方式是根据DEA定期发送的`dea.advertise`消息获得当前全局DEA的资源状态，并从中取得一个合适的DEA。后者则是立刻发送一个`dea.discover`消息等待满足的条件的DEA回复自己包含`{ :id => uuid, :ip => @local_ip, :port => @file_viewer_port, :version => VERSION }`的消息。有了这些消息，接下来cc就可以发送启动命令给DEA要求DEA启动droplet了
 
@@ -534,30 +504,28 @@ cc收到stager打包后的app之后，开始准备根据用户提供的`resource
 
 **2. dea启动droplet**
 
-  {% highlight ruby linenos%}
-  def start_instances(start_message, index, max_to_start)
-    EM.next_tick do
-      f = Fiber.new do
-        message = start_message.dup
-        message[:executableUri] = download_app_uri(message[:executableUri])
-        message[:debug] = @app.metadata[:debug]
-        message[:console] = @app.metadata[:console]
-        (index...max_to_start).each do |i|
-          message[:index] = i
-          dea_id = find_dea_for(message)
-          json = Yajl::Encoder.encode(message)
-          if dea_id
-            CloudController.logger.debug("Sending start message #{json} to DEA #{dea_id}")
-            NATS.publish("dea.#{dea_id}.start", json)
-          else
-            CloudController.logger.warn("No resources available to start instance #{json}")
+      def start_instances(start_message, index, max_to_start)
+        EM.next_tick do
+          f = Fiber.new do
+            message = start_message.dup
+            message[:executableUri] = download_app_uri(message[:executableUri])
+            message[:debug] = @app.metadata[:debug]
+            message[:console] = @app.metadata[:console]
+            (index...max_to_start).each do |i|
+              message[:index] = i
+              dea_id = find_dea_for(message)
+              json = Yajl::Encoder.encode(message)
+              if dea_id
+                CloudController.logger.debug("Sending start message #{json} to DEA #{dea_id}")
+                NATS.publish("dea.#{dea_id}.start", json)
+              else
+                CloudController.logger.warn("No resources available to start instance #{json}")
+              end
+            end
           end
+          f.resume
         end
       end
-      f.resume
-    end
-  end
-  {% endhighlight %}
 
   在这里cc通过在NATS上发送`topic=dea.#{dea_id}.start`的消息，告知dea_id对应的DEA下载droplet的URL, resource limit等等一切所需要的消息，等待DEA启动droplet.
 
