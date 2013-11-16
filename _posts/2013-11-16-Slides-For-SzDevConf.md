@@ -8,6 +8,9 @@ tags: ["archive"]
 ---
 {% include JB/setup %}
 
-<object width="100%" height="560" type="application/pdf" data="/codes/orchestration/suzhou-devops-tiewei.pdf#zoom=50&view=FitH">
-	<param name="initZoom" value="fitH" />
+<object width="100%" height="560px" data="/codes/orchestration/suzhou-devops-tiewei.pdf" type="application/pdf">
+	<embed src="/codes/orchestration/suzhou-devops-tiewei.pdf" type="application/pdf">&nbsp; </embed>
+	    alt :<a href="/codes/orchestration/suzhou-devops-tiewei.pdf">
 </object>
+
+__[download link](/codes/orchestration/suzhou-devops-tiewei.pdf)__
