@@ -119,7 +119,5 @@ BOSH的代码保存在[github上](https://github.com/cloudfoundry/bosh), 可以c
 
 详见本人另外一篇博客[《BOSH Terms and Working Steps》][2]
 
-_TODO: 翻译_
-
 [1]: http://tiewei.github.io/bosh/Ruby-Magic-in-BOSH/ "ruby元编程在BOSH中的应用"
 [2]: http://tiewei.github.io/bosh/BOSH-Terms-and-Working-Steps/ "BOSH中的概念和工作流程"
