@@ -456,4 +456,5 @@ docker的dirver要利用snapshot机制，起初的fs是一个空的ext4的目录
 希望能对想要了解docker的朋友有所帮助，更细致的了解还是得深入代码, 了解个中原委。
 
 docker@github - <https://github.com/dotcloud/docker>
+
 docker_maillist - <https://groups.google.com/forum/#!forum/docker-dev>
