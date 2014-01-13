@@ -3,7 +3,7 @@ layout: post
 title: "Cloud Orchestration In My View"
 tagline : "Cloud Orchestration 之我见"
 description: "Cloud Orchestration In My View"
-category: orchestration
+category: "Cloud"
 tags: [cloud, orchestration, BOSH, HEAT]
 published: false
 ---

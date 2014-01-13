@@ -3,7 +3,7 @@ layout: post
 title: "Vagrant Introduction"
 tagline : "Vagrant 简介"
 description: ""
-category: devops
+category: "DevOps"
 tags: ["vagrant"]
 published: false
 ---

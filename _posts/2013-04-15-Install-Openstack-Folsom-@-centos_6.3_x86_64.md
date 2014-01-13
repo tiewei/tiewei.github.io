@@ -1,6 +1,6 @@
 ---
 layout: post
-category : openstack
+category : "Cloud"
 title : Openstack Install Guide @ centos 6.3
 tagline: "在centos 6.3上安装openstack Folsom"
 tags : [openstack]

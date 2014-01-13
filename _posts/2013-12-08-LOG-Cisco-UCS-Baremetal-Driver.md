@@ -3,7 +3,7 @@ layout: post
 title: "LOG : Cisco UCS Baremetal Dirver"
 tagline : "日志：UCS裸机安装"
 description: "LOG : Cisco UCS Baremetal Dirver"
-category: "DevOps" 
+category: "DevOps"
 tags: ["DevOps"]
 ---
 {% include JB/setup %}
