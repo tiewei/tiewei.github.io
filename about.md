@@ -38,11 +38,8 @@ Welcome to sharing my original articles, but please mark the author and source l
 **Booklist**
 
 + Reading:
-  - Rework
-  - Metaprogramming Ruby
   - APUE
 + Plan:
-  - Java Concurrency in Practice
   - CSAPP
   - Code Complete
 
@@ -50,7 +47,7 @@ Welcome to sharing my original articles, but please mark the author and source l
 
 + Cloud computing related codes
   - openstack + cloud foundry = ?
-+ Google products  (who doesn't ?)
++ Google products
 
 **Hate**
 
