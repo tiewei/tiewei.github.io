@@ -3,9 +3,8 @@ layout: post
 title: "Cloud Orchestration In My View "
 tagline : "Cloud Orchestration 个人见解"
 description: "Cloud Orchestration In My View"
-category: "Cloud"
+category: "DevOps"
 tags: [cloud, orchestration, BOSH, HEAT]
-published: false
 ---
 {% include JB/setup %}
 
@@ -130,8 +129,23 @@ vagrant 用 ruby 编写实现了一套完整DSL， packer 用 go 编写，手段
 * ansible
 
 作者是cobbler的开发者之一，ansible 能够做的是Application Deployment，Configuration Management，Cloud & Amazon (AWS, EC2) Automation，Continuous Delivery (with Jenkins, etc.)。
-这个项目最初是为了成为第三个 puppet 而存在的。可以看出他有很多配置管理的代码和DSL。 这个项目是python实现的，而且完全不通过agent来访问VM。侵入性非常小，交付起来更灵活。
+这个项目最初是为了成为第三个 puppet 而存在的。可以看出他有很多配置管理的代码和DSL。 这个项目是python实现的，而且完全不通过agent来访问VM，侵入性非常小，交付起来更灵活。个人认为目前是
+这个市场最具竞争力的一家了。
 
 ## 个人理解 
 
+在IaaS大张旗鼓的推进下，越来越多的企业考虑将自己的业务运行的 cloud 上，然而如何迁移到 cloud 上是十分困难的问题。
+Cloud 不提供API就是耍流氓，Orchestration 工具就是利用 cloud 的API的特点能够将从资源申请到应用运行管理的一系列工作，
+通过一份配置文件，将业务和cloud关联起来。
 
+另外一个思路是利用现有的PaaS平台来屏蔽 cloud 的细节，专注为用户提供服务，用户只需提供 app 的编译包。
+然而笔者之前的 blog 对 PaaS 的缺点也描述了许多，对能部署在其上的应用要求很高:
+
+* 运行环境要简单 - buildpack虽然用于解决类似问题，但仍然不是很理想
+* 要尽可能的使用service - 常用的mysql, apache倒能理解，但是类似log之类的如果也要用service就让用户接入PaaS平台, 让用户难以维护
+* 要尽可能的使用"平台" - 单机环境构建出目标PaaS上运行的实际环境比较困难，开发测试工作都离不开"平台"
+* 缺少可定制性 - 可选的中间件有限，难于调优和debug。
+
+而且 PaaS 对网络功能的订制几乎没有，大多使用 container 技术对关键业务的SLA也隔离有限，所以更多地适合一些互联网的快速试错类应用。
+
+所以，从企业的需要出发，更需要的是一个强大的 orchestration 工具来解决问题，国内外已有许多家 startup 瞄准此处市场。
