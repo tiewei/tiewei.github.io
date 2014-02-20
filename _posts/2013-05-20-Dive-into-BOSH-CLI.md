@@ -211,11 +211,3 @@ BOSH CLI 是BOSH命令行的入口，所有对BOSH的操作都是通过BOSH CLI�
 15. Bosh::Agent::HTTPHandler.start/Bosh::Agent::Handler.start
 
 在deployer和agent交互的同时，一方面deployer利用agent\_client向agent发送命令，并等待执行结束，另一方面由openstack执行的操作，都是通过openstack\_cpi线程执行，并通知openstack registry，agent在执行时会从openstack registry获取配置信息，并执行deployer发来的指令。
-
-## bosh create release
-
-## bosh upload release
-
-## bosh upload stemcell
-
-## bosh deploy
