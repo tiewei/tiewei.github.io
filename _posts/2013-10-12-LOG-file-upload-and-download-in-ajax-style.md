@@ -3,7 +3,7 @@ layout: post
 title: "LOG : file upload/download in ajax style"
 tagline : "日志 - 利用Ajax进行文件上传/下载"
 description: "LOG : file upload/download in ajax style"
-category: web-dev
+category: log
 tags: ["jquery","php"]
 ---
 {% include JB/setup %}
