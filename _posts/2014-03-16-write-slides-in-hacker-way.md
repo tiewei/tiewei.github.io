@@ -72,7 +72,13 @@ v2版本主要是想解决 v1版本太粗糙的原因 :(.后来发现依然没�
 bin/md2reveal <input-markdown-file> <output-dir> <version>
 ```
 
-在 test 下有两个版本的实例，熟悉 markdown 的应该再熟悉不过了。输出的效果如 <http://lab.hakim.se/reveal-js/#/>
+在 test 下有两个版本的实例，熟悉 markdown 的应该再熟悉不过了。
+
+[test/slide-v1.md](https://github.com/TieWei/md_revelator/blob/master/test/slide-v1.md)查看<a href="/codes/md_revelator/slide-v1.html" target="_blank">输出效果</a>
+
+[test/slide-v2.md](https://github.com/TieWei/md_revelator/blob/master/test/slide-v2.md)查看<a href="/codes/md_revelator/slide-v2.html" target="_blank">输出效果</a>
+
+2014-3-17 Update - 加入CDN支持，默认开启，HOST 位于 <http://cdn.staticfile.org/reveal.js/2.6/> 
 
 
 ### 结束语
