@@ -7,8 +7,6 @@ title : about
 
 This is Wei Tie's personal blog about tech, life and others
 
----
-
 ## About Me
 
 ### Tie Wei
