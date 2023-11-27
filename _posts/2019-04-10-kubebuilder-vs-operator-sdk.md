@@ -280,9 +280,9 @@ helps developing.
 
 Both kubebuilder and operator-sdk are good tools to start writing k8s controllers, they are well documented, having good communities and provide
 helper commands to start a new project or adding new controller. The operator-sdk has better integration with helm, and having better integration
-with the operator-framework ecosystem, while the kuebuilder integrates with existing kubernetes-sigs projects naturally. This post goes through background
-, installing and development process for both tools, and I think the kuebuilder could provides better management over codes, so I would suggest to use
-kuebuilder to start a new projects.
+with the operator-framework ecosystem, while the kubebuilder integrates with existing kubernetes-sigs projects naturally. This post goes through background
+, installing and development process for both tools, and I think the kubebuilder could provides better management over codes, so I would suggest to use
+kubebuilder to start a new projects.
 
 ---
 Wei T.
